@@ -111,7 +111,7 @@ class SupportService:
                 self._sender.assistants_chat_id,
                 ticket.topic_id,
                 f"Новый тикет от {full_name} (@{username or 'no_user'}):\n\n{text}",
-                reply_markup=kb
+                reply_markup=kb,
             )
             if msg_id:
                 await self._repo.save_message_mapping(msg_id, ticket.ticket_id)
@@ -130,7 +130,7 @@ class SupportService:
                 self._sender.assistants_chat_id,
                 ticket.topic_id,
                 f"Клиент добавил:\n{text}",
-                reply_markup=kb_close
+                reply_markup=kb_close,
             )
             if msg_id:
                 await self._repo.save_message_mapping(msg_id, ticket.ticket_id)
@@ -162,7 +162,7 @@ class SupportService:
             self._sender.assistants_chat_id,
             ticket.topic_id,
             f"Ассистент @{username} взял тикет в работу.",
-            reply_markup=self._sender.get_close_keyboard(ticket_id)
+            reply_markup=self._sender.get_close_keyboard(ticket_id),
         )
 
     async def handle_assistant_reply(
@@ -229,7 +229,7 @@ class SupportService:
         await self._sender.send_to_topic(
             self._sender.assistants_chat_id,
             ticket.topic_id,
-            f"Тикет закрыт ассистентом @{username}."
+            f"Тикет закрыт ассистентом @{username}.",
         )
 
         # Уведомляем клиента

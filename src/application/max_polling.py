@@ -1,9 +1,15 @@
 import asyncio
+
 import structlog
+
 from src.application.interfaces import MaxSenderInterface
 from src.application.use_cases import SupportService
 
 logger = structlog.get_logger()
+
+INITIAL_POLL_DELAY = 1.0
+MAX_POLL_DELAY = 60.0
+BACKOFF_FACTOR = 2.0
 
 
 class MaxPollingService:
@@ -11,27 +17,30 @@ class MaxPollingService:
         self.max_sender = max_sender
         self.support_service = support_service
         self.last_update_id = 0
+        self._poll_delay = INITIAL_POLL_DELAY
         self.log = logger.bind(service="max_polling")
 
-    async def start_polling(self):
+    async def start_polling(self) -> None:
         self.log.info("starting_max_polling_loop")
         while True:
             try:
                 updates = await self.max_sender.get_updates(self.last_update_id)
                 for update in updates:
                     await self.process_update(update)
-                    # Update the last_update_id to avoid processing same update again
-                    # Assuming update has an 'update_id' field
                     uid = update.get("update_id")
                     if uid and uid >= self.last_update_id:
                         self.last_update_id = uid + 1
+
+                # Reset delay on success
+                self._poll_delay = INITIAL_POLL_DELAY
             except Exception as e:
                 self.log.error("polling_error", error=str(e))
-            
-            await asyncio.sleep(1)  # Wait 1 second between polls
+                self._poll_delay = min(self._poll_delay * BACKOFF_FACTOR, MAX_POLL_DELAY)
+                self.log.info("backing_off", delay=self._poll_delay)
 
-    async def process_update(self, update: dict):
-        # Assuming update contains a 'message' field with 'from', 'text', etc.
+            await asyncio.sleep(self._poll_delay)
+
+    async def process_update(self, update: dict) -> None:
         message = update.get("message")
         if not message:
             return
@@ -47,5 +56,5 @@ class MaxPollingService:
                 client_id=client_id,
                 full_name=full_name,
                 username=username,
-                text=text
+                text=text,
             )

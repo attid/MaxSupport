@@ -7,4 +7,7 @@ lint:
 fmt:
 	uv run ruff format src
 
+fmt-check:
+	uv run ruff format --check src
+
 check: fmt lint test

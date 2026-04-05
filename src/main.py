@@ -1,152 +1,87 @@
-import asyncio
-import logging
-import os
-from typing import Any, Awaitable, Callable, Dict
+"""Application entry point — DI composition root."""
 
-from aiogram import BaseMiddleware, Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+import asyncio
+import os
+
+import structlog
+from aiogram import Bot, Dispatcher
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from src.application.interfaces import BotSenderInterface, MaxSenderInterface
 from src.application.max_polling import MaxPollingService
 from src.application.monitoring import AlarmService
 from src.application.use_cases import SupportService
 from src.infrastructure.config import Settings
 from src.infrastructure.database import SQLiteRepository
 from src.infrastructure.max import MaxSender
+from src.infrastructure.telegram.bot_sender import BotSender
 from src.interface.telegram.handlers import assistant
+from src.interface.telegram.middleware import SupportServiceMiddleware
 
-
-class BotSender(BotSenderInterface):
-    def __init__(self, bot: Bot, assistants_chat_id: int):
-        self._bot = bot
-        self._assistants_chat_id = assistants_chat_id
-
-    @property
-    def assistants_chat_id(self) -> int:
-        return self._assistants_chat_id
-
-    async def send_to_client(self, cid: int, text: str, reply_markup: Any = None) -> int:
-        msg = await self._bot.send_message(cid, text, reply_markup=reply_markup)
-        return msg.message_id
-
-    async def send_to_assistant(self, aid: int, text: str, reply_markup: Any = None) -> int:
-        msg = await self._bot.send_message(aid, text, reply_markup=reply_markup)
-        return msg.message_id
-
-    async def send_to_topic(
-        self, chat_id: int, topic_id: int, text: str, reply_markup: Any = None
-    ) -> int:
-        msg = await self._bot.send_message(
-            chat_id, text, message_thread_id=topic_id, reply_markup=reply_markup
-        )
-        return msg.message_id
-
-    async def create_forum_topic(self, chat_id: int, name: str) -> int:
-        topic = await self._bot.create_forum_topic(chat_id, name)
-        return topic.message_thread_id
-
-    async def edit_forum_topic(self, chat_id: int, topic_id: int, name: str) -> None:
-        await self._bot.edit_forum_topic(chat_id, topic_id, name=name)
-
-    async def notify_assistants(self, text: str) -> int:
-        try:
-            msg = await self._bot.send_message(self._assistants_chat_id, text)
-            return msg.message_id
-        except Exception as e:
-            logging.error(f"Failed to notify assistants: {e}")
-            return 0
-
-    def get_take_keyboard(self, ticket_id: str) -> Any:
-        return InlineKeyboardMarkup(
-            inline_keyboard=[[
-                InlineKeyboardButton(text="Взять", callback_data=f"take:{ticket_id}")
-            ]]
-        )
-
-    def get_close_keyboard(self, ticket_id: str) -> Any:
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="Закрыть", callback_data=f"close:{ticket_id}")],
-                [InlineKeyboardButton(text="Другой вопрос", callback_data=f"another:{ticket_id}")]
-            ]
-        )
-
-    def get_taken_keyboard(self, ticket_id: str, username: str) -> Any:
-        return InlineKeyboardMarkup(
-            inline_keyboard=[[
-                InlineKeyboardButton(text=f"Взял @{username}", callback_data="none")
-            ]]
-        )
-
-
-class SupportServiceMiddleware(BaseMiddleware):
-    def __init__(self, service: SupportService):
-        self.service = service
-
-    async def __call__(
-        self,
-        handler: Callable[[Any, Dict[str, Any]], Awaitable[Any]],
-        event: Any,
-        data: Dict[str, Any],
-    ) -> Any:
-        data["support_service"] = self.service
-        return await handler(event, data)
+logger = structlog.get_logger()
 
 
 async def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.StackInfoRenderer(),
+            structlog.dev.ConsoleRenderer(),
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger("INFO"),
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
 
     commit_sha = os.getenv("COMMIT_SHA", "unknown")
-    logging.info(f"Starting application on commit: {commit_sha}")
+    log = logger.bind(commit_sha=commit_sha)
+    log.info("starting_application")
 
-    # Загружаем настройки
+    # Settings
     settings = Settings()
 
-    # Обеспечиваем наличие директории для БД
+    # Ensure DB directory exists
     db_path = settings.db_url.replace("sqlite+aiosqlite:///", "")
     db_dir = os.path.dirname(db_path)
     if db_dir and not os.path.exists(db_dir):
         os.makedirs(db_dir, exist_ok=True)
 
-    # Настройка БД
+    # Database
     engine = create_async_engine(settings.db_url)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     repo = SQLiteRepository(session_factory)
     await repo.init_db()
 
+    # Telegram bot
     bot = Bot(token=settings.telegram_bot_token)
     dp = Dispatcher()
 
+    # DI — wire up interfaces
     sender = BotSender(bot, settings.assistants_chat_id)
     max_sender = MaxSender(token=settings.max_bot_token)
     support_service = SupportService(repo, sender, max_sender)
 
-    # Логируем информацию о ботах
+    # Log bot info
     bot_info = await bot.get_me()
-    logging.info(f"Telegram Bot connected: @{bot_info.username} (ID: {bot_info.id})")
+    log.info("telegram_bot_connected", username=bot_info.username, bot_id=bot_info.id)
 
     max_info = await max_sender.get_me()
     max_username = max_info.get("username") or max_info.get("name", "Unknown")
-    logging.info(f"Max Bot connected: @{max_username}")
+    log.info("max_bot_connected", username=max_username)
 
-    # Запускаем мониторинг
+    # Background services
     alarm_service = AlarmService(repo, sender)
     asyncio.create_task(alarm_service.start_monitoring())
 
-    # Запускаем полинг Max
     max_polling = MaxPollingService(max_sender, support_service)
     asyncio.create_task(max_polling.start_polling())
 
-    # DI Middleware
+    # Middleware & routers
     dp.update.middleware.register(SupportServiceMiddleware(support_service))
+    dp.include_routers(assistant.create_router(support_service))
 
-    # Регистрируем роутеры с передачей настроек
-    dp.include_routers(
-        assistant.create_router(support_service),
-    )
-
-    logging.info("Starting polling...")
+    log.info("starting_telegram_polling")
     await dp.start_polling(bot)
 
 

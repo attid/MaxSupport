@@ -13,4 +13,4 @@ ENV COMMIT_SHA=$COMMIT_SHA
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 COPY src/ /app/src/
-# ENTRYPOINT ["python", "-m", "src.main"]
+ENTRYPOINT ["python", "-m", "src.main"]

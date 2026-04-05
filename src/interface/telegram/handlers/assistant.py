@@ -1,4 +1,3 @@
-
 from aiogram import F, Router, types
 
 from src.application.use_cases import SupportService
@@ -83,4 +82,3 @@ def create_router(support_service: SupportService) -> Router:
         )
 
     return router
-
