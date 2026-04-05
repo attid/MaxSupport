@@ -13,7 +13,7 @@ from src.application.use_cases import SupportService
 from src.infrastructure.config import Settings
 from src.infrastructure.database import SQLiteRepository
 from src.infrastructure.max import MaxSender
-from src.interface.telegram.handlers import assistant, client
+from src.interface.telegram.handlers import assistant
 
 
 class BotSender(BotSenderInterface):
@@ -138,7 +138,6 @@ async def main() -> None:
 
     # Регистрируем роутеры с передачей настроек
     dp.include_routers(
-        client.create_router(support_service),
         assistant.create_router(support_service),
     )
 
