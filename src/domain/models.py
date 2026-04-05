@@ -1,7 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel, Field
+
+
+def utc_now() -> datetime:
+    """Return current UTC time with timezone info."""
+    return datetime.now(timezone.utc)
 
 
 class UserRole(str, Enum):
@@ -25,7 +31,7 @@ class TicketStatus(str, Enum):
 class TicketMessage(BaseModel):
     sender_id: int
     text: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = Field(default_factory=utc_now)
 
 
 class Ticket(BaseModel):
@@ -34,4 +40,4 @@ class Ticket(BaseModel):
     assistant_id: Optional[int] = None
     status: TicketStatus = TicketStatus.OPEN
     messages: List[TicketMessage] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=utc_now)

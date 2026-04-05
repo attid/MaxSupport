@@ -1,18 +1,19 @@
 import json
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
+
 from sqlalchemy import (
-    String,
-    Text,
     DateTime,
     ForeignKey,
+    String,
+    Text,
     select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from src.domain.models import Ticket, TicketMessage, TicketStatus, User, UserRole
 from src.application.interfaces import RepositoryInterface
+from src.domain.models import Ticket, TicketMessage, TicketStatus, User, UserRole
 
 
 class Base(DeclarativeBase):
@@ -31,9 +32,7 @@ class TicketTable(Base):
     __tablename__ = "tickets"
     ticket_id: Mapped[str] = mapped_column(primary_key=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"))
-    assistant_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.user_id"), nullable=True
-    )
+    assistant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.user_id"), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="open")
     messages_json: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -50,9 +49,7 @@ class SQLiteRepository(RepositoryInterface):
 
     async def get_user(self, user_id: int) -> Optional[User]:
         async with self.session_factory() as session:
-            res = await session.execute(
-                select(UserTable).where(UserTable.user_id == user_id)
-            )
+            res = await session.execute(select(UserTable).where(UserTable.user_id == user_id))
             row = res.scalar_one_or_none()
             if row:
                 return User(
@@ -103,7 +100,16 @@ class SQLiteRepository(RepositoryInterface):
             )
             row = res.scalar_one_or_none()
             if row:
-                return await self.get_ticket(row.ticket_id)
+                # Получаем данные напрямую, без дополнительного запроса
+                msgs = [TicketMessage(**m) for m in json.loads(row.messages_json)]
+                return Ticket(
+                    ticket_id=row.ticket_id,
+                    client_id=row.client_id,
+                    assistant_id=row.assistant_id,
+                    status=TicketStatus(row.status),
+                    messages=msgs,
+                    created_at=row.created_at,
+                )
             return None
 
     async def save_ticket(self, ticket: Ticket) -> None:
@@ -122,4 +128,17 @@ class SQLiteRepository(RepositoryInterface):
             await session.commit()
 
     async def get_available_assistants(self) -> List[User]:
-        return []  # Пока пусто
+        async with self.session_factory() as session:
+            res = await session.execute(
+                select(UserTable).where(UserTable.role == UserRole.ASSISTANT.value)
+            )
+            rows = res.scalars().all()
+            return [
+                User(
+                    user_id=row.user_id,
+                    username=row.username,
+                    full_name=row.full_name,
+                    role=UserRole(row.role),
+                )
+                for row in rows
+            ]

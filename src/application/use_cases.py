@@ -1,18 +1,31 @@
 import uuid
+
+from src.application.interfaces import BotSenderInterface, RepositoryInterface
 from src.domain.models import Ticket, TicketMessage, TicketStatus, User, UserRole
-from src.application.interfaces import RepositoryInterface, BotSenderInterface
 
 
 class SupportService:
     def __init__(self, repo: RepositoryInterface, sender: BotSenderInterface):
-        self.repo = repo
-        self.sender = sender
+        self._repo = repo
+        self._sender = sender
+
+    @property
+    def repo(self) -> RepositoryInterface:
+        return self._repo
+
+    @property
+    def sender(self) -> BotSenderInterface:
+        return self._sender
 
     async def handle_client_message(
-        self, client_id: int, full_name: str, text: str, username: str = None
-    ):
+        self,
+        client_id: int,
+        full_name: str,
+        text: str,
+        username: str | None = None,
+    ) -> None:
         # Обеспечиваем наличие пользователя
-        user = await self.repo.get_user(client_id)
+        user = await self._repo.get_user(client_id)
         if not user:
             user = User(
                 user_id=client_id,
@@ -20,31 +33,38 @@ class SupportService:
                 username=username,
                 role=UserRole.CLIENT,
             )
-            await self.repo.save_user(user)
+            await self._repo.save_user(user)
 
         # Ищем активный тикет
-        ticket = await self.repo.get_active_ticket_by_client(client_id)
-        if not ticket:
-            ticket = Ticket(ticket_id=str(uuid.uuid4()), client_id=client_id)
-            await self.sender.notify_assistants(
-                f"Новый тикет {ticket.ticket_id} от {full_name}: {text}"
+        ticket = await self._repo.get_active_ticket_by_client(client_id)
+        is_new_ticket = ticket is None
+
+        if is_new_ticket:
+            ticket = Ticket(
+                ticket_id=str(uuid.uuid4()),
+                client_id=client_id,
             )
 
         # Добавляем сообщение
         msg = TicketMessage(sender_id=client_id, text=text)
         ticket.messages.append(msg)
-        await self.repo.save_ticket(ticket)
 
-        # Пересылаем сообщение в чат ассистентов с указанием тикета
-        if ticket.assistant_id:
-            await self.sender.notify_assistants(
-                f"Тикет {ticket.ticket_id} (Ассистент {ticket.assistant_id}) | Клиент {full_name}: {text}"
+        # СНАЧАЛА СОХРАНЯЕМ
+        await self._repo.save_ticket(ticket)
+
+        # ПОТОМ уведомляем (только для новых тикетов)
+        if is_new_ticket:
+            await self._sender.notify_assistants(
+                f"Новый тикет {ticket.ticket_id} от {full_name}: {text}"
             )
 
     async def handle_assistant_reply(
-        self, assistant_id: int, ticket_id: str, text: str
-    ):
-        ticket = await self.repo.get_ticket(ticket_id)
+        self,
+        assistant_id: int,
+        ticket_id: str,
+        text: str,
+    ) -> None:
+        ticket = await self._repo.get_ticket(ticket_id)
         if not ticket:
             return
 
@@ -53,8 +73,22 @@ class SupportService:
             ticket.status = TicketStatus.ASSIGNED
             ticket.assistant_id = assistant_id
 
-        # Сохраняем и пересылаем
+        # Сохраняем сообщение
         msg = TicketMessage(sender_id=assistant_id, text=text)
         ticket.messages.append(msg)
-        await self.repo.save_ticket(ticket)
-        await self.sender.send_to_client(ticket.client_id, text)
+
+        # СНАЧАЛА СОХРАНЯЕМ
+        await self._repo.save_ticket(ticket)
+
+        # ПОТОМ отправляем клиенту
+        await self._sender.send_to_client(ticket.client_id, text)
+
+    async def close_ticket(self, ticket_id: str) -> bool:
+        """Close a ticket. Returns True if successful, False if ticket not found."""
+        ticket = await self._repo.get_ticket(ticket_id)
+        if not ticket:
+            return False
+
+        ticket.status = TicketStatus.CLOSED
+        await self._repo.save_ticket(ticket)
+        return True
