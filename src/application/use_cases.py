@@ -4,7 +4,11 @@ from typing import Optional
 
 import structlog
 
-from src.application.interfaces import BotSenderInterface, RepositoryInterface
+from src.application.interfaces import (
+    BotSenderInterface,
+    MaxSenderInterface,
+    RepositoryInterface,
+)
 from src.domain.models import Ticket, TicketMessage, TicketStatus, User, UserRole
 
 logger = structlog.get_logger()
@@ -15,9 +19,15 @@ def utc_now() -> datetime:
 
 
 class SupportService:
-    def __init__(self, repo: RepositoryInterface, sender: BotSenderInterface):
+    def __init__(
+        self,
+        repo: RepositoryInterface,
+        sender: BotSenderInterface,
+        max_sender: MaxSenderInterface,
+    ):
         self._repo = repo
         self._sender = sender
+        self._max_sender = max_sender
         self.log = logger.bind(service="support_service")
 
     @property
@@ -27,6 +37,10 @@ class SupportService:
     @property
     def sender(self) -> BotSenderInterface:
         return self._sender
+
+    @property
+    def max_sender(self) -> MaxSenderInterface:
+        return self._max_sender
 
     async def is_assistant(self, user_id: int) -> bool:
         """Check if a user is an assistant."""
@@ -192,7 +206,7 @@ class SupportService:
         await self._repo.save_ticket(ticket)
 
         # ПОТОМ отправляем клиенту
-        await self._sender.send_to_client(ticket.client_id, text)
+        await self._max_sender.send_to_client(ticket.client_id, text)
 
     async def close_ticket(self, ticket_id: str, assistant_id: int, username: str) -> bool:
         """Close a ticket. Returns True if successful."""
@@ -219,10 +233,11 @@ class SupportService:
         )
 
         # Уведомляем клиента
-        await self._sender.send_to_client(
+        await self._max_sender.send_to_client(
             ticket.client_id,
-            "Ваш тикет закрыт. Если у вас возникнут новые вопросы, просто напишите нам!"
+            "Ваш тикет закрыт. Если у вас возникнут новые вопросы, просто напишите нам!",
         )
+
         return True
 
     async def handle_another_question(

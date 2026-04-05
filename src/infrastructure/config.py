@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     for local development (not used in production).
     """
 
-    bot_token: str
+    telegram_bot_token: str
+    max_bot_token: str
     assistants_chat_id: int
     db_url: str = "sqlite+aiosqlite:///./data.db"
 

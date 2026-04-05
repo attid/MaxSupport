@@ -3,49 +3,54 @@ import logging
 import os
 from typing import Any, Awaitable, Callable, Dict
 
-from aiogram import BaseMiddleware, Bot, Dispatcher
+from aiogram import BaseMiddleware, Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from src.application.interfaces import BotSenderInterface
+from src.application.interfaces import BotSenderInterface, MaxSenderInterface
 from src.application.monitoring import AlarmService
 from src.application.use_cases import SupportService
 from src.infrastructure.config import Settings
 from src.infrastructure.database import SQLiteRepository
+from src.infrastructure.max import MaxSender
 from src.interface.telegram.handlers import assistant, client
 
 
 class BotSender(BotSenderInterface):
     def __init__(self, bot: Bot, assistants_chat_id: int):
-        self.bot = bot
-        self.assistants_chat_id = assistants_chat_id
+        self._bot = bot
+        self._assistants_chat_id = assistants_chat_id
+
+    @property
+    def assistants_chat_id(self) -> int:
+        return self._assistants_chat_id
 
     async def send_to_client(self, cid: int, text: str, reply_markup: Any = None) -> int:
-        msg = await self.bot.send_message(cid, text, reply_markup=reply_markup)
+        msg = await self._bot.send_message(cid, text, reply_markup=reply_markup)
         return msg.message_id
 
     async def send_to_assistant(self, aid: int, text: str, reply_markup: Any = None) -> int:
-        msg = await self.bot.send_message(aid, text, reply_markup=reply_markup)
+        msg = await self._bot.send_message(aid, text, reply_markup=reply_markup)
         return msg.message_id
 
     async def send_to_topic(
         self, chat_id: int, topic_id: int, text: str, reply_markup: Any = None
     ) -> int:
-        msg = await self.bot.send_message(
+        msg = await self._bot.send_message(
             chat_id, text, message_thread_id=topic_id, reply_markup=reply_markup
         )
         return msg.message_id
 
     async def create_forum_topic(self, chat_id: int, name: str) -> int:
-        topic = await self.bot.create_forum_topic(chat_id, name)
+        topic = await self._bot.create_forum_topic(chat_id, name)
         return topic.message_thread_id
 
     async def edit_forum_topic(self, chat_id: int, topic_id: int, name: str) -> None:
-        await self.bot.edit_forum_topic(chat_id, topic_id, name=name)
+        await self._bot.edit_forum_topic(chat_id, topic_id, name=name)
 
     async def notify_assistants(self, text: str) -> int:
         try:
-            msg = await self.bot.send_message(self.assistants_chat_id, text)
+            msg = await self._bot.send_message(self._assistants_chat_id, text)
             return msg.message_id
         except Exception as e:
             logging.error(f"Failed to notify assistants: {e}")
@@ -91,6 +96,9 @@ class SupportServiceMiddleware(BaseMiddleware):
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
+    commit_sha = os.getenv("COMMIT_SHA", "unknown")
+    logging.info(f"Starting application on commit: {commit_sha}")
+
     # Загружаем настройки
     settings = Settings()
 
@@ -106,11 +114,20 @@ async def main() -> None:
     repo = SQLiteRepository(session_factory)
     await repo.init_db()
 
-    bot = Bot(token=settings.bot_token)
+    bot = Bot(token=settings.telegram_bot_token)
     dp = Dispatcher()
 
     sender = BotSender(bot, settings.assistants_chat_id)
-    support_service = SupportService(repo, sender)
+    max_sender = MaxSender(token=settings.max_bot_token)
+    support_service = SupportService(repo, sender, max_sender)
+
+    # Логируем информацию о ботах
+    bot_info = await bot.get_me()
+    logging.info(f"Telegram Bot connected: @{bot_info.username} (ID: {bot_info.id})")
+
+    max_info = await max_sender.get_me()
+    max_username = max_info.get("username") or max_info.get("name", "Unknown")
+    logging.info(f"Max Bot connected: @{max_username}")
 
     # Запускаем мониторинг
     alarm_service = AlarmService(repo, sender)
@@ -125,7 +142,7 @@ async def main() -> None:
         assistant.create_router(support_service),
     )
 
-    logging.info("Starting bot with SQLite...")
+    logging.info("Starting polling...")
     await dp.start_polling(bot)
 
 

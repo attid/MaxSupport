@@ -46,16 +46,21 @@ class RepositoryInterface(ABC):
         pass
 
 
+class MaxSenderInterface(ABC):
+    @abstractmethod
+    async def send_to_client(self, client_id: int, text: str) -> int:
+        pass
+
+    @abstractmethod
+    async def get_me(self) -> dict:
+        """Returns bot info from MAX platform."""
+        pass
+
+
 class BotSenderInterface(ABC):
     @property
     @abstractmethod
     def assistants_chat_id(self) -> int:
-        pass
-
-    @abstractmethod
-    async def send_to_client(
-        self, client_id: int, text: str, reply_markup: Optional[Any] = None
-    ) -> int:
         pass
 
     @abstractmethod
