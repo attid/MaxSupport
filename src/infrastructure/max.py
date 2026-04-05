@@ -16,8 +16,27 @@ class MaxSender(MaxSenderInterface):
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
-                logging.error(f"Failed to connect to Max API: {e}")
+                logging.error(f"Failed to connect to Max API (get_me): {e}")
                 return {}
+
+    async def get_updates(self, last_update_id: int) -> list[dict]:
+        async with httpx.AsyncClient() as client:
+            params = {"offset": last_update_id, "limit": 100}
+            try:
+                response = await client.get(
+                    f"{self.base_url}/updates",
+                    headers=self.headers,
+                    params=params
+                )
+                response.raise_for_status()
+                data = response.json()
+                # Assuming data is a list of update objects or has a 'results' field
+                if isinstance(data, list):
+                    return data
+                return data.get("results", [])
+            except Exception as e:
+                logging.error(f"Failed to fetch updates from Max API: {e}")
+                return []
 
     async def send_to_client(self, client_id: int, text: str) -> int:
         async with httpx.AsyncClient() as client:

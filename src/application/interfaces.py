@@ -56,6 +56,11 @@ class MaxSenderInterface(ABC):
         """Returns bot info from MAX platform."""
         pass
 
+    @abstractmethod
+    async def get_updates(self, last_update_id: int) -> List[dict]:
+        """Fetch new messages from MAX platform."""
+        pass
+
 
 class BotSenderInterface(ABC):
     @property

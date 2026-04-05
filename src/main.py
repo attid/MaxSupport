@@ -8,6 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.application.interfaces import BotSenderInterface, MaxSenderInterface
+from src.application.max_polling import MaxPollingService
 from src.application.monitoring import AlarmService
 from src.application.use_cases import SupportService
 from src.infrastructure.config import Settings
@@ -132,6 +133,10 @@ async def main() -> None:
     # Запускаем мониторинг
     alarm_service = AlarmService(repo, sender)
     asyncio.create_task(alarm_service.start_monitoring())
+
+    # Запускаем полинг Max
+    max_polling = MaxPollingService(max_sender, support_service)
+    asyncio.create_task(max_polling.start_polling())
 
     # DI Middleware
     dp.update.middleware.register(SupportServiceMiddleware(support_service))
