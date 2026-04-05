@@ -38,6 +38,8 @@ class Ticket(BaseModel):
     ticket_id: str
     client_id: int
     assistant_id: Optional[int] = None
+    topic_id: Optional[int] = None
     status: TicketStatus = TicketStatus.OPEN
     messages: List[TicketMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
+    taken_at: Optional[datetime] = None

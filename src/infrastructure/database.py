@@ -33,9 +33,17 @@ class TicketTable(Base):
     ticket_id: Mapped[str] = mapped_column(primary_key=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"))
     assistant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.user_id"), nullable=True)
+    topic_id: Mapped[Optional[int]] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="open")
     messages_json: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    taken_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class MessageMappingTable(Base):
+    __tablename__ = "message_mappings"
+    message_id: Mapped[int] = mapped_column(primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.ticket_id"))
 
 
 class SQLiteRepository(RepositoryInterface):
@@ -84,9 +92,51 @@ class SQLiteRepository(RepositoryInterface):
                     ticket_id=row.ticket_id,
                     client_id=row.client_id,
                     assistant_id=row.assistant_id,
+                    topic_id=row.topic_id,
                     status=TicketStatus(row.status),
                     messages=msgs,
                     created_at=row.created_at,
+                    taken_at=row.taken_at,
+                )
+            return None
+
+    async def get_all_active_tickets(self) -> List[Ticket]:
+        async with self.session_factory() as session:
+            res = await session.execute(
+                select(TicketTable).where(TicketTable.status != TicketStatus.CLOSED.value)
+            )
+            rows = res.scalars().all()
+            return [
+                Ticket(
+                    ticket_id=row.ticket_id,
+                    client_id=row.client_id,
+                    assistant_id=row.assistant_id,
+                    topic_id=row.topic_id,
+                    status=TicketStatus(row.status),
+                    messages=[TicketMessage(**m) for m in json.loads(row.messages_json)],
+                    created_at=row.created_at,
+                    taken_at=row.taken_at,
+                )
+                for row in rows
+            ]
+
+    async def get_ticket_by_topic(self, topic_id: int) -> Optional[Ticket]:
+        async with self.session_factory() as session:
+            res = await session.execute(
+                select(TicketTable).where(TicketTable.topic_id == topic_id)
+            )
+            row = res.scalar_one_or_none()
+            if row:
+                msgs = [TicketMessage(**m) for m in json.loads(row.messages_json)]
+                return Ticket(
+                    ticket_id=row.ticket_id,
+                    client_id=row.client_id,
+                    assistant_id=row.assistant_id,
+                    topic_id=row.topic_id,
+                    status=TicketStatus(row.status),
+                    messages=msgs,
+                    created_at=row.created_at,
+                    taken_at=row.taken_at,
                 )
             return None
 
@@ -100,15 +150,16 @@ class SQLiteRepository(RepositoryInterface):
             )
             row = res.scalar_one_or_none()
             if row:
-                # Получаем данные напрямую, без дополнительного запроса
                 msgs = [TicketMessage(**m) for m in json.loads(row.messages_json)]
                 return Ticket(
                     ticket_id=row.ticket_id,
                     client_id=row.client_id,
                     assistant_id=row.assistant_id,
+                    topic_id=row.topic_id,
                     status=TicketStatus(row.status),
                     messages=msgs,
                     created_at=row.created_at,
+                    taken_at=row.taken_at,
                 )
             return None
 
@@ -120,9 +171,11 @@ class SQLiteRepository(RepositoryInterface):
                     ticket_id=ticket.ticket_id,
                     client_id=ticket.client_id,
                     assistant_id=ticket.assistant_id,
+                    topic_id=ticket.topic_id,
                     status=ticket.status.value,
                     messages_json=msgs_json,
                     created_at=ticket.created_at,
+                    taken_at=ticket.taken_at,
                 )
             )
             await session.commit()
@@ -142,3 +195,19 @@ class SQLiteRepository(RepositoryInterface):
                 )
                 for row in rows
             ]
+
+    async def save_message_mapping(self, message_id: int, ticket_id: str) -> None:
+        async with self.session_factory() as session:
+            await session.merge(
+                MessageMappingTable(message_id=message_id, ticket_id=ticket_id)
+            )
+            await session.commit()
+
+    async def get_ticket_id_by_message(self, message_id: int) -> Optional[str]:
+        async with self.session_factory() as session:
+            res = await session.execute(
+                select(MessageMappingTable.ticket_id).where(
+                    MessageMappingTable.message_id == message_id
+                )
+            )
+            return res.scalar_one_or_none()
