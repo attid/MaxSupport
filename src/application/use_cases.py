@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
 import uuid
-import structlog
+from datetime import datetime, timezone
 from typing import Optional
+
+import structlog
 
 from src.application.interfaces import BotSenderInterface, RepositoryInterface
 from src.domain.models import Ticket, TicketMessage, TicketStatus, User, UserRole
@@ -46,7 +47,7 @@ class SupportService:
     ) -> None:
         log = self.log.bind(client_id=client_id, full_name=full_name)
         log.info("handling_client_message", force_new_ticket=force_new_ticket)
-        
+
         # Обеспечиваем наличие пользователя
         user = await self._repo.get_user(client_id)
         if not user:
@@ -63,7 +64,7 @@ class SupportService:
         ticket = None
         if not force_new_ticket:
             ticket = await self._repo.get_active_ticket_by_client(client_id)
-        
+
         is_new_ticket = ticket is None
 
         if is_new_ticket:
@@ -74,7 +75,7 @@ class SupportService:
             topic_id = await self._sender.create_forum_topic(
                 self._sender.assistants_chat_id, topic_name
             )
-            
+
             ticket = Ticket(
                 ticket_id=ticket_id,
                 client_id=client_id,
@@ -123,7 +124,7 @@ class SupportService:
     async def take_ticket(self, ticket_id: str, assistant_id: int, username: str) -> None:
         log = self.log.bind(assistant_id=assistant_id, ticket_id=ticket_id)
         log.info("taking_ticket")
-        
+
         ticket = await self._repo.get_ticket(ticket_id)
         if not ticket or ticket.status != TicketStatus.OPEN:
             log.warning("ticket_not_eligible_for_taking")
@@ -139,7 +140,7 @@ class SupportService:
         await self._sender.edit_forum_topic(
             self._sender.assistants_chat_id, ticket.topic_id, new_name
         )
-        
+
         # Мы не можем легко найти сообщение с кнопкой "Взять" без message_id,
         # но мы можем отправить новое сообщение в топик или просто оставить как есть.
         # В идеале нужно хранить message_id первого сообщения.
@@ -158,7 +159,7 @@ class SupportService:
     ) -> None:
         log = self.log.bind(assistant_id=assistant_id, ticket_id=ticket_id)
         log.info("handling_assistant_reply")
-        
+
         ticket = await self._repo.get_ticket(ticket_id)
         if not ticket:
             log.warning("ticket_not_found")
@@ -169,12 +170,15 @@ class SupportService:
             ticket.status = TicketStatus.ASSIGNED
             ticket.assistant_id = assistant_id
             ticket.taken_at = utc_now()
-            
+
         # Возвращаем желтый статус 🟡 в названии топика после ответа ассистента
         # Получаем данные ассистента (для username)
         assistant = await self._repo.get_user(assistant_id)
-        assistant_name = (assistant.username or assistant.full_name) if assistant else str(assistant_id)
-        
+        if assistant:
+            assistant_name = assistant.username or assistant.full_name
+        else:
+            assistant_name = str(assistant_id)
+
         new_name = f"🟡 Взял @{assistant_name}: {ticket.client_id}"
         await self._sender.edit_forum_topic(
             self._sender.assistants_chat_id, ticket.topic_id, new_name
@@ -194,26 +198,26 @@ class SupportService:
         """Close a ticket. Returns True if successful."""
         log = self.log.bind(ticket_id=ticket_id, assistant_id=assistant_id)
         log.info("closing_ticket")
-        
+
         ticket = await self._repo.get_ticket(ticket_id)
         if not ticket:
             return False
 
         ticket.status = TicketStatus.CLOSED
         await self._repo.save_ticket(ticket)
-        
+
         # Обновляем имя топика
         new_name = f"🟢 Закрыл @{username}: {ticket.client_id}"
         await self._sender.edit_forum_topic(
             self._sender.assistants_chat_id, ticket.topic_id, new_name
         )
-        
+
         await self._sender.send_to_topic(
             self._sender.assistants_chat_id,
             ticket.topic_id,
             f"Тикет закрыт ассистентом @{username}."
         )
-        
+
         # Уведомляем клиента
         await self._sender.send_to_client(
             ticket.client_id,
@@ -221,7 +225,9 @@ class SupportService:
         )
         return True
 
-    async def handle_another_question(self, ticket_id: str, assistant_id: int, username: str) -> None:
+    async def handle_another_question(
+        self, ticket_id: str, assistant_id: int, username: str
+    ) -> None:
         """Close current ticket and prompt for a new one, or handle it as a new question."""
         ticket = await self._repo.get_ticket(ticket_id)
         if not ticket:
@@ -229,9 +235,9 @@ class SupportService:
 
         # Закрываем текущий
         await self.close_ticket(ticket_id, assistant_id, username)
-        
-        # Здесь мы могли бы перенести последнее сообщение в новый тикет, 
-        # но проще всего попросить клиента написать новый вопрос или 
+
+        # Здесь мы могли бы перенести последнее сообщение в новый тикет,
+        # но проще всего попросить клиента написать новый вопрос или
         # вручную создать новый тикет из последнего сообщения.
         # Для простоты — просто закрываем. Пользователь просил "создает новую тему".
         # Но для этого нам нужно знать, какое сообщение "другое".

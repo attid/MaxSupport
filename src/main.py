@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any, Awaitable, Callable, Dict
 
-from aiogram import BaseMiddleware, Bot, Dispatcher, types
+from aiogram import BaseMiddleware, Bot, Dispatcher
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -28,7 +28,9 @@ class BotSender(BotSenderInterface):
         msg = await self.bot.send_message(aid, text, reply_markup=reply_markup)
         return msg.message_id
 
-    async def send_to_topic(self, chat_id: int, topic_id: int, text: str, reply_markup: Any = None) -> int:
+    async def send_to_topic(
+        self, chat_id: int, topic_id: int, text: str, reply_markup: Any = None
+    ) -> int:
         msg = await self.bot.send_message(
             chat_id, text, message_thread_id=topic_id, reply_markup=reply_markup
         )

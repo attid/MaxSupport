@@ -1,4 +1,4 @@
-from src.domain.models import User, UserRole, Ticket, TicketMessage, TicketStatus
+from src.domain.models import Ticket, TicketMessage, TicketStatus, User, UserRole
 
 
 def test_user_creation():

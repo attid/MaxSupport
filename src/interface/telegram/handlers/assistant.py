@@ -1,4 +1,3 @@
-import re
 
 from aiogram import F, Router, types
 
@@ -18,7 +17,9 @@ def create_router(support_service: SupportService) -> Router:
             return
 
         await support_service.take_ticket(
-            ticket_id, callback.from_user.id, callback.from_user.username or callback.from_user.full_name
+            ticket_id,
+            callback.from_user.id,
+            callback.from_user.username or callback.from_user.full_name,
         )
         await callback.answer("Вы взяли тикет в работу.")
         # Опционально: отредактировать сообщение, удалив кнопку или заменив её
@@ -40,7 +41,9 @@ def create_router(support_service: SupportService) -> Router:
             return
 
         await support_service.close_ticket(
-            ticket_id, callback.from_user.id, callback.from_user.username or callback.from_user.full_name
+            ticket_id,
+            callback.from_user.id,
+            callback.from_user.username or callback.from_user.full_name,
         )
         await callback.answer("Тикет закрыт.")
 
@@ -53,7 +56,9 @@ def create_router(support_service: SupportService) -> Router:
             return
 
         await support_service.handle_another_question(
-            ticket_id, callback.from_user.id, callback.from_user.username or callback.from_user.full_name
+            ticket_id,
+            callback.from_user.id,
+            callback.from_user.username or callback.from_user.full_name,
         )
         await callback.answer("Тикет закрыт. Попросите клиента написать новый вопрос.")
 

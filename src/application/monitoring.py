@@ -1,10 +1,9 @@
 import asyncio
-import logging
 from datetime import datetime, time, timezone
+
 import structlog
 
 from src.application.interfaces import BotSenderInterface, RepositoryInterface
-from src.domain.models import TicketStatus
 
 logger = structlog.get_logger()
 
@@ -35,17 +34,17 @@ class AlarmService:
                     self.log.debug("outside_working_hours")
             except Exception as e:
                 self.log.error("monitoring_error", error=str(e))
-            
+
             await asyncio.sleep(60)  # Check every minute
 
     async def check_tickets(self):
         active_tickets = await self.repo.get_all_active_tickets()
         now = datetime.now(timezone.utc)
-        
+
         for ticket in active_tickets:
             if not ticket.messages:
                 continue
-                
+
             last_msg = ticket.messages[-1]
             # If last message is from client
             if last_msg.sender_id == ticket.client_id:

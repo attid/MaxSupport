@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
 from src.domain.models import Ticket, User
 
@@ -53,15 +53,21 @@ class BotSenderInterface(ABC):
         pass
 
     @abstractmethod
-    async def send_to_client(self, client_id: int, text: str, reply_markup: Optional[Any] = None) -> int:
+    async def send_to_client(
+        self, client_id: int, text: str, reply_markup: Optional[Any] = None
+    ) -> int:
         pass
 
     @abstractmethod
-    async def send_to_assistant(self, assistant_id: int, text: str, reply_markup: Optional[Any] = None) -> int:
+    async def send_to_assistant(
+        self, assistant_id: int, text: str, reply_markup: Optional[Any] = None
+    ) -> int:
         pass
 
     @abstractmethod
-    async def send_to_topic(self, chat_id: int, topic_id: int, text: str, reply_markup: Optional[Any] = None) -> int:
+    async def send_to_topic(
+        self, chat_id: int, topic_id: int, text: str, reply_markup: Optional[Any] = None
+    ) -> int:
         pass
 
     @abstractmethod
