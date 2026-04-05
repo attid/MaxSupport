@@ -11,7 +11,7 @@ from src.application.max_polling import MaxPollingService
 from src.application.monitoring import AlarmService
 from src.application.use_cases import SupportService
 from src.infrastructure.config import Settings
-from src.infrastructure.database import SQLiteRepository
+from src.infrastructure.database import SQLiteRepository, setup_sqlite_engine
 from src.infrastructure.max import MaxSender
 from src.infrastructure.telegram.bot_sender import BotSender
 from src.interface.telegram.handlers import assistant
@@ -49,6 +49,7 @@ async def main() -> None:
 
     # Database
     engine = create_async_engine(settings.db_url)
+    setup_sqlite_engine(engine)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     repo = SQLiteRepository(session_factory)
     await repo.init_db()

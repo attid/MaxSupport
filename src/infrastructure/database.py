@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Text,
+    event,
     select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -14,6 +15,21 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from src.application.interfaces import RepositoryInterface
 from src.domain.models import Ticket, TicketMessage, TicketStatus, User, UserRole
+
+
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
+def setup_sqlite_engine(engine) -> None:
+    """Register SQLite pragmas for the engine."""
+    from sqlalchemy import event
+
+    event.listen(engine.sync_engine, "connect", _set_sqlite_pragma)
 
 
 def _utc_now() -> datetime:
