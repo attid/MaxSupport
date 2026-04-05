@@ -27,7 +27,6 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 
 def setup_sqlite_engine(engine) -> None:
     """Register SQLite pragmas for the engine."""
-    from sqlalchemy import event
 
     event.listen(engine.sync_engine, "connect", _set_sqlite_pragma)
 
