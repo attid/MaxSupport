@@ -250,7 +250,9 @@ class SupportService:
 
         await self._max_sender.send_to_client(chat, text, attachments=max_attachments or None)
 
-    async def close_ticket(self, ticket_id: str, assistant_id: int, username: str) -> bool:
+    async def close_ticket(
+        self, ticket_id: str, assistant_id: int, username: str, notify_client: bool = True
+    ) -> bool:
         """Close a ticket. Returns True if successful."""
         log = self.log.bind(ticket_id=ticket_id, assistant_id=assistant_id)
         log.info("closing_ticket")
@@ -275,27 +277,48 @@ class SupportService:
         )
 
         # Уведомляем клиента
-        await self._max_sender.send_to_client(
-            ticket.max_chat_id or ticket.client_id,
-            "Ваш тикет закрыт. Если у вас возникнут новые вопросы, просто напишите нам!",
-        )
+        if notify_client:
+            await self._max_sender.send_to_client(
+                ticket.max_chat_id or ticket.client_id,
+                "Ваш тикет закрыт. Если у вас возникнут новые вопросы, просто напишите нам!",
+            )
 
         return True
 
     async def handle_another_question(
         self, ticket_id: str, assistant_id: int, username: str
     ) -> None:
-        """Close current ticket and prompt for a new one, or handle it as a new question."""
+        """Close current ticket and create a new one from the last client message."""
         ticket = await self._repo.get_ticket(ticket_id)
         if not ticket:
             return
 
-        # Закрываем текущий
-        await self.close_ticket(ticket_id, assistant_id, username)
+        # Находим последнее сообщение клиента
+        last_client_msg = None
+        for msg in reversed(ticket.messages):
+            if msg.sender_id == ticket.client_id:
+                last_client_msg = msg
+                break
 
-        # Здесь мы могли бы перенести последнее сообщение в новый тикет,
-        # но проще всего попросить клиента написать новый вопрос или
-        # вручную создать новый тикет из последнего сообщения.
-        # Для простоты — просто закрываем. Пользователь просил "создает новую тему".
-        # Но для этого нам нужно знать, какое сообщение "другое".
-        # В контексте кнопок под каждым сообщением клиента — мы знаем.
+        # Закрываем текущий без уведомления клиента
+        await self.close_ticket(ticket_id, assistant_id, username, notify_client=False)
+
+        # Уведомляем клиента о переводе
+        await self._max_sender.send_to_client(
+            ticket.max_chat_id or ticket.client_id,
+            "Ваш вопрос переведён в новое обращение.",
+        )
+
+        # Создаём новый тикет из последнего сообщения клиента
+        if last_client_msg:
+            client = await self._repo.get_user(ticket.client_id)
+            full_name = client.full_name if client else str(ticket.client_id)
+            client_username = client.username if client else None
+            await self.handle_client_message(
+                client_id=ticket.client_id,
+                full_name=full_name,
+                username=client_username,
+                text=last_client_msg.text,
+                force_new_ticket=True,
+                max_chat_id=ticket.max_chat_id,
+            )
