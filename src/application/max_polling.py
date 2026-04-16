@@ -14,6 +14,19 @@ BACKOFF_FACTOR = 2.0
 
 SUPPORTED_ATTACHMENT_TYPES = {"image", "file", "audio"}
 
+_DEFAULT_EXTENSIONS = {
+    "image": "jpg",
+    "audio": "mp3",
+    "file": "bin",
+}
+
+
+def _default_filename(att_type: str, payload: dict) -> str:
+    """Generate a readable filename for attachments without one."""
+    ext = _DEFAULT_EXTENSIONS.get(att_type, "bin")
+    mid = payload.get("mid") or payload.get("id") or "attachment"
+    return f"{att_type}_{mid}.{ext}"
+
 
 class MaxPollingService:
     def __init__(self, max_sender: MaxSenderInterface, support_service: SupportService):
@@ -72,11 +85,12 @@ class MaxPollingService:
             att_type = att.get("type", "")
             if att_type in SUPPORTED_ATTACHMENT_TYPES:
                 payload = att.get("payload", {})
+                filename = att.get("filename") or _default_filename(att_type, payload)
                 attachments.append(
                     Attachment(
                         type=AttachmentType(att_type),
                         url=payload.get("url", ""),
-                        filename=att.get("filename"),
+                        filename=filename,
                         token=payload.get("token"),
                     )
                 )

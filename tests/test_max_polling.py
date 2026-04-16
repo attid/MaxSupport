@@ -72,9 +72,12 @@ async def test_process_update_with_image_attachment(polling, support_service):
     await polling.process_update(update)
 
     call_args = support_service.handle_client_message.call_args
-    assert call_args.kwargs["attachments"] == [
-        Attachment(type=AttachmentType.IMAGE, url="https://example.com/photo.jpg", token="img_tok"),
-    ]
+    atts = call_args.kwargs["attachments"]
+    assert len(atts) == 1
+    assert atts[0].type == AttachmentType.IMAGE
+    assert atts[0].url == "https://example.com/photo.jpg"
+    assert atts[0].token == "img_tok"
+    assert atts[0].filename.endswith(".jpg")
 
 
 @pytest.mark.asyncio

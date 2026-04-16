@@ -83,12 +83,18 @@ class BotSender(BotSenderInterface):
         )
 
     async def send_file_to_topic(self, chat_id: int, topic_id: int, attachment: Attachment) -> int:
-        log = logger.bind(action="send_file_to_topic", att_type=attachment.type)
+        log = logger.bind(
+            action="send_file_to_topic",
+            att_type=attachment.type,
+            url=attachment.url[:80] if attachment.url else None,
+        )
         try:
-            async with httpx.AsyncClient(timeout=30.0) as http:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as http:
+                log.info("downloading_attachment")
                 r = await http.get(attachment.url)
                 r.raise_for_status()
                 file_data = r.content
+                log.info("downloaded_attachment", size=len(file_data))
 
             filename = attachment.filename or "file"
             input_file = BufferedInputFile(file_data, filename=filename)
@@ -97,6 +103,7 @@ class BotSender(BotSenderInterface):
                 msg = await self._bot.send_photo(chat_id, input_file, message_thread_id=topic_id)
             else:
                 msg = await self._bot.send_document(chat_id, input_file, message_thread_id=topic_id)
+            log.info("file_sent_to_topic", message_id=msg.message_id)
             return msg.message_id
         except Exception as e:
             log.error("send_file_to_topic_error", error=str(e))
