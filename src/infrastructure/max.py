@@ -4,18 +4,11 @@ import httpx
 import structlog
 
 from src.application.interfaces import MaxSenderInterface
-from src.domain.models import Attachment, AttachmentType
+from src.domain.models import Attachment
 
 logger = structlog.get_logger()
 
 MAX_API_BASE_URL = "https://platform-api.max.ru"
-
-# Mapping AttachmentType → Max API attachment type string
-_ATTACHMENT_TYPE_MAP = {
-    AttachmentType.IMAGE: "image",
-    AttachmentType.FILE: "file",
-    AttachmentType.AUDIO: "file",  # audio sent as file in Max
-}
 
 
 class MaxSender(MaxSenderInterface):
@@ -95,13 +88,9 @@ class MaxSender(MaxSenderInterface):
             if text:
                 body["text"] = text
             if attachments:
+                # Uploaded tokens always work as "file" type
                 body["attachments"] = [
-                    {
-                        "type": _ATTACHMENT_TYPE_MAP.get(a.type, "file"),
-                        "payload": {"token": a.token},
-                    }
-                    for a in attachments
-                    if a.token
+                    {"type": "file", "payload": {"token": a.token}} for a in attachments if a.token
                 ]
             response = await self._client.post(
                 "/messages",
