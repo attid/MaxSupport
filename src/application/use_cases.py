@@ -46,6 +46,18 @@ class SupportService:
         """Check if user is a member of the assistants chat."""
         return await self._sender.is_chat_member(self._sender.assistants_chat_id, user_id)
 
+    async def _ensure_assistant(self, user_id: int, username: str) -> None:
+        """Create assistant user in DB if not exists (for FK integrity)."""
+        user = await self._repo.get_user(user_id)
+        if not user:
+            user = User(
+                user_id=user_id,
+                full_name=username,
+                username=username,
+                role=UserRole.ASSISTANT,
+            )
+            await self._repo.save_user(user)
+
     async def get_ticket_id_by_message(self, message_id: int) -> Optional[str]:
         """Get ticket ID associated with a message."""
         return await self._repo.get_ticket_id_by_message(message_id)
@@ -143,6 +155,8 @@ class SupportService:
             log.warning("ticket_not_eligible_for_taking")
             return
 
+        await self._ensure_assistant(assistant_id, username)
+
         ticket.status = TicketStatus.ASSIGNED
         ticket.assistant_id = assistant_id
         ticket.taken_at = utc_now()
@@ -169,6 +183,7 @@ class SupportService:
         assistant_id: int,
         ticket_id: str,
         text: str,
+        username: str = "",
     ) -> None:
         log = self.log.bind(assistant_id=assistant_id, ticket_id=ticket_id)
         log.info("handling_assistant_reply")
@@ -177,6 +192,8 @@ class SupportService:
         if not ticket:
             log.warning("ticket_not_found")
             return
+
+        await self._ensure_assistant(assistant_id, username or str(assistant_id))
 
         # Если тикет был OPEN, переводим в ASSIGNED
         if ticket.status == TicketStatus.OPEN:

@@ -79,6 +79,7 @@ def create_router(support_service: SupportService) -> Router:
             assistant_id=message.from_user.id,
             ticket_id=ticket.ticket_id,
             text=message.text,
+            username=message.from_user.username or message.from_user.full_name,
         )
 
     return router
