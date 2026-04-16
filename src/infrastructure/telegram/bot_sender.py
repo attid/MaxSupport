@@ -4,6 +4,7 @@ from typing import Any
 
 import structlog
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.application.interfaces import BotSenderInterface
@@ -37,7 +38,11 @@ class BotSender(BotSenderInterface):
         return topic.message_thread_id
 
     async def edit_forum_topic(self, chat_id: int, topic_id: int, name: str) -> None:
-        await self._bot.edit_forum_topic(chat_id, topic_id, name=name)
+        try:
+            await self._bot.edit_forum_topic(chat_id, topic_id, name=name)
+        except TelegramBadRequest as e:
+            if "TOPIC_NOT_MODIFIED" not in str(e):
+                raise
 
     async def is_chat_member(self, chat_id: int, user_id: int) -> bool:
         try:
