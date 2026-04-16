@@ -1,5 +1,7 @@
 """Max API sender — реализация MaxSenderInterface через httpx."""
 
+import asyncio
+
 import httpx
 import structlog
 
@@ -90,18 +92,27 @@ class MaxSender(MaxSenderInterface):
                 body["attachments"] = [
                     {"type": "file", "payload": {"token": a.token}} for a in attachments if a.token
                 ]
-            response = await self._client.post(
-                "/messages",
-                params={"chat_id": chat_id},
-                json=body,
-            )
-            if response.status_code != 200:
+
+            # Retry loop: uploaded files may not be processed immediately
+            max_retries = 3
+            for attempt in range(max_retries):
+                response = await self._client.post(
+                    "/messages",
+                    params={"chat_id": chat_id},
+                    json=body,
+                )
+                if response.status_code == 200:
+                    return 0
+                if "attachment.not.ready" in response.text and attempt < max_retries - 1:
+                    log.info("attachment_not_ready_retrying", attempt=attempt + 1)
+                    await asyncio.sleep(2)
+                    continue
                 log.error(
                     "max_api_error",
                     status=response.status_code,
                     response_body=response.text,
                 )
-            response.raise_for_status()
+                response.raise_for_status()
             return 0
         except Exception as e:
             log.error("max_api_error", error=str(e))
