@@ -53,11 +53,11 @@ class MaxSender(MaxSenderInterface):
         try:
             response = await self._client.post(
                 "/messages",
-                json={"chat_id": chat_id, "text": text},
+                params={"chat_id": chat_id},
+                json={"text": text},
             )
             response.raise_for_status()
-            res_data = response.json()
-            return res_data.get("message_id", 0)
+            return 0
         except Exception as e:
             log.error("max_api_error", error=str(e))
             return 0
