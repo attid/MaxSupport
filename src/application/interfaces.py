@@ -73,6 +73,11 @@ class BotSenderInterface(ABC):
         pass
 
     @abstractmethod
+    async def is_chat_member(self, chat_id: int, user_id: int) -> bool:
+        """Check if user is a member of the given chat."""
+        pass
+
+    @abstractmethod
     async def send_to_assistant(
         self, assistant_id: int, text: str, reply_markup: Optional[Any] = None
     ) -> int:

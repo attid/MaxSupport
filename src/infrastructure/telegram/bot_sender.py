@@ -39,6 +39,13 @@ class BotSender(BotSenderInterface):
     async def edit_forum_topic(self, chat_id: int, topic_id: int, name: str) -> None:
         await self._bot.edit_forum_topic(chat_id, topic_id, name=name)
 
+    async def is_chat_member(self, chat_id: int, user_id: int) -> bool:
+        try:
+            member = await self._bot.get_chat_member(chat_id, user_id)
+            return member.status in ("creator", "administrator", "member")
+        except Exception:
+            return False
+
     async def notify_assistants(self, text: str) -> int:
         log = logger.bind(chat_id=self._assistants_chat_id)
         try:

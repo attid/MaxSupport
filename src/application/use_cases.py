@@ -43,9 +43,10 @@ class SupportService:
         return self._max_sender
 
     async def is_assistant(self, user_id: int) -> bool:
-        """Check if a user is an assistant."""
-        user = await self._repo.get_user(user_id)
-        return user is not None and user.role == UserRole.ASSISTANT
+        """Check if user is a member of the assistants chat."""
+        return await self._sender.is_chat_member(
+            self._sender.assistants_chat_id, user_id
+        )
 
     async def get_ticket_id_by_message(self, message_id: int) -> Optional[str]:
         """Get ticket ID associated with a message."""

@@ -121,15 +121,12 @@ async def test_close_ticket_success(service, repo, sender, max_sender):
 
 
 @pytest.mark.asyncio
-async def test_is_assistant(service, repo):
-    # Setup
-    repo.get_user.side_effect = [
-        User(user_id=1, full_name="A", role=UserRole.ASSISTANT),
-        User(user_id=2, full_name="C", role=UserRole.CLIENT),
-        None
-    ]
-    
-    # Act & Assert
+async def test_is_assistant(service, sender):
+    # Member of assistants chat → True
+    sender.is_chat_member.return_value = True
     assert await service.is_assistant(1) is True
+    sender.is_chat_member.assert_called_with(sender.assistants_chat_id, 1)
+
+    # Not a member → False
+    sender.is_chat_member.return_value = False
     assert await service.is_assistant(2) is False
-    assert await service.is_assistant(3) is False
