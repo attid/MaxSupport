@@ -1,11 +1,15 @@
 services:
   bot:
-    build: .
+    image: ghcr.io/attid/maxsupport:latest
     restart: always
     volumes:
-      - ./data:/app/data
+      - data:/app/data
     # Переменные окружения передаются через docker run -e или environment: секцию в compose
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
+      MAX_BOT_TOKEN: ${MAX_BOT_TOKEN}
       ASSISTANTS_CHAT_ID: ${ASSISTANTS_CHAT_ID}
       DB_URL: sqlite+aiosqlite:////app/data/data.db
+
+volumes:
+  data:
