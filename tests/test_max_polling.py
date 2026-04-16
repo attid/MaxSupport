@@ -1,8 +1,10 @@
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from src.application.max_polling import MaxPollingService
 from src.application.use_cases import SupportService
+from src.domain.models import Attachment, AttachmentType
 
 
 @pytest.fixture
@@ -25,7 +27,12 @@ async def test_process_update_with_text_message(polling, support_service):
     update = {
         "update_type": "message_created",
         "message": {
-            "sender": {"user_id": 123, "first_name": "Max", "last_name": "User", "username": "maxuser"},
+            "sender": {
+                "user_id": 123,
+                "first_name": "Max",
+                "last_name": "User",
+                "username": "maxuser",
+            },
             "body": {"text": "Hello"},
             "recipient": {"chat_id": 456},
         },
@@ -39,7 +46,53 @@ async def test_process_update_with_text_message(polling, support_service):
         username="maxuser",
         text="Hello",
         max_chat_id=456,
+        attachments=[],
     )
+
+
+@pytest.mark.asyncio
+async def test_process_update_with_image_attachment(polling, support_service):
+    update = {
+        "update_type": "message_created",
+        "message": {
+            "sender": {"user_id": 123, "first_name": "Igor"},
+            "body": {
+                "text": "",
+                "attachments": [
+                    {
+                        "type": "image",
+                        "payload": {"url": "https://example.com/photo.jpg", "token": "img_tok"},
+                    }
+                ],
+            },
+            "recipient": {"chat_id": 456},
+        },
+    }
+
+    await polling.process_update(update)
+
+    call_args = support_service.handle_client_message.call_args
+    assert call_args.kwargs["attachments"] == [
+        Attachment(type=AttachmentType.IMAGE, url="https://example.com/photo.jpg", token="img_tok"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_process_update_unsupported_attachment_replies(polling, support_service, max_sender):
+    update = {
+        "update_type": "message_created",
+        "message": {
+            "sender": {"user_id": 123, "first_name": "Igor"},
+            "body": {"text": "", "attachments": [{"type": "sticker", "payload": {}}]},
+            "recipient": {"chat_id": 456},
+        },
+    }
+
+    await polling.process_update(update)
+
+    support_service.handle_client_message.assert_not_called()
+    max_sender.send_to_client.assert_called_once()
+    assert "не поддерживается" in max_sender.send_to_client.call_args.args[1]
 
 
 @pytest.mark.asyncio
@@ -57,7 +110,7 @@ async def test_process_update_ignores_no_message(polling, support_service):
 
 
 @pytest.mark.asyncio
-async def test_process_update_ignores_no_text(polling, support_service):
+async def test_process_update_ignores_no_text_no_attachments(polling, support_service):
     update = {
         "update_type": "message_created",
         "message": {
@@ -71,11 +124,15 @@ async def test_process_update_ignores_no_text(polling, support_service):
 
 @pytest.mark.asyncio
 async def test_poll_delay_resets_on_success(polling, max_sender):
-    """After successful poll, delay should reset to initial value."""
     from src.application.max_polling import INITIAL_POLL_DELAY
 
     max_sender.get_updates.return_value = (
-        [{"update_type": "message_created", "message": {"sender": {"user_id": 1, "first_name": "U"}, "body": {"text": "hi"}}}],
+        [
+            {
+                "update_type": "message_created",
+                "message": {"sender": {"user_id": 1, "first_name": "U"}, "body": {"text": "hi"}},
+            }
+        ],
         42,
     )
 

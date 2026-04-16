@@ -10,6 +10,20 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class AttachmentType(str, Enum):
+    IMAGE = "image"
+    FILE = "file"
+    AUDIO = "audio"
+
+
+class Attachment(BaseModel):
+    type: AttachmentType
+    url: str = ""
+    filename: str | None = None
+    token: str | None = None
+    file_data: bytes | None = None
+
+
 class UserRole(str, Enum):
     CLIENT = "client"
     ASSISTANT = "assistant"

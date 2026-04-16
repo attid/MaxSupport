@@ -4,12 +4,15 @@ import structlog
 
 from src.application.interfaces import MaxSenderInterface
 from src.application.use_cases import SupportService
+from src.domain.models import Attachment, AttachmentType
 
 logger = structlog.get_logger()
 
 INITIAL_POLL_DELAY = 1.0
 MAX_POLL_DELAY = 60.0
 BACKOFF_FACTOR = 2.0
+
+SUPPORTED_ATTACHMENT_TYPES = {"image", "file", "audio"}
 
 
 class MaxPollingService:
@@ -56,16 +59,57 @@ class MaxPollingService:
         body = message.get("body", {})
         text = body.get("text") if isinstance(body, dict) else message.get("text")
 
-        # chat_id from recipient or directly from message
+        # chat_id from recipient
         recipient = message.get("recipient", {})
         chat_id = recipient.get("chat_id") or message.get("chat_id")
 
-        if client_id and text:
-            self.log.info("received_new_message", client_id=client_id, chat_id=chat_id, text=text)
+        # Parse attachments
+        raw_attachments = body.get("attachments", []) if isinstance(body, dict) else []
+        attachments: list[Attachment] = []
+        has_unsupported = False
+
+        for att in raw_attachments:
+            att_type = att.get("type", "")
+            if att_type in SUPPORTED_ATTACHMENT_TYPES:
+                payload = att.get("payload", {})
+                attachments.append(
+                    Attachment(
+                        type=AttachmentType(att_type),
+                        url=payload.get("url", ""),
+                        filename=att.get("filename"),
+                        token=payload.get("token"),
+                    )
+                )
+            else:
+                has_unsupported = True
+
+        if not client_id:
+            return
+
+        # Reply about unsupported format if there's nothing useful
+        if has_unsupported and not attachments and not text:
+            self.log.info("unsupported_attachment", client_id=client_id)
+            if chat_id:
+                await self.max_sender.send_to_client(
+                    chat_id,
+                    "Формат сообщения не поддерживается. "
+                    "Пожалуйста, отправьте текст, фото, файл или аудио.",
+                )
+            return
+
+        if text or attachments:
+            self.log.info(
+                "received_new_message",
+                client_id=client_id,
+                chat_id=chat_id,
+                text=text,
+                attachments_count=len(attachments),
+            )
             await self.support_service.handle_client_message(
                 client_id=client_id,
                 full_name=full_name,
                 username=username,
-                text=text,
+                text=text or "",
                 max_chat_id=chat_id,
+                attachments=attachments,
             )

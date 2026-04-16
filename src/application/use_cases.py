@@ -9,7 +9,7 @@ from src.application.interfaces import (
     MaxSenderInterface,
     RepositoryInterface,
 )
-from src.domain.models import Ticket, TicketMessage, TicketStatus, User, UserRole
+from src.domain.models import Attachment, Ticket, TicketMessage, TicketStatus, User, UserRole
 
 logger = structlog.get_logger()
 
@@ -70,6 +70,7 @@ class SupportService:
         username: str | None = None,
         force_new_ticket: bool = False,
         max_chat_id: int | None = None,
+        attachments: list[Attachment] | None = None,
     ) -> None:
         log = self.log.bind(client_id=client_id, full_name=full_name)
         log.info("handling_client_message", force_new_ticket=force_new_ticket)
@@ -128,6 +129,11 @@ class SupportService:
             )
             if msg_id:
                 await self._repo.save_message_mapping(msg_id, ticket.ticket_id)
+            # Пересылаем вложения
+            for att in attachments or []:
+                await self._sender.send_file_to_topic(
+                    self._sender.assistants_chat_id, ticket.topic_id, att
+                )
         else:
             # Если тикет был взят (желтый), а клиент написал — снова делаем красным 🔴
             if ticket.status == TicketStatus.ASSIGNED:
@@ -147,6 +153,11 @@ class SupportService:
             )
             if msg_id:
                 await self._repo.save_message_mapping(msg_id, ticket.ticket_id)
+            # Пересылаем вложения
+            for att in attachments or []:
+                await self._sender.send_file_to_topic(
+                    self._sender.assistants_chat_id, ticket.topic_id, att
+                )
 
     async def take_ticket(self, ticket_id: str, assistant_id: int, username: str) -> None:
         log = self.log.bind(assistant_id=assistant_id, ticket_id=ticket_id)
@@ -186,6 +197,7 @@ class SupportService:
         ticket_id: str,
         text: str,
         username: str = "",
+        attachments: list[Attachment] | None = None,
     ) -> None:
         log = self.log.bind(assistant_id=assistant_id, ticket_id=ticket_id)
         log.info("handling_assistant_reply")
@@ -224,7 +236,19 @@ class SupportService:
         await self._repo.save_ticket(ticket)
 
         # ПОТОМ отправляем клиенту
-        await self._max_sender.send_to_client(ticket.max_chat_id or ticket.client_id, text)
+        chat = ticket.max_chat_id or ticket.client_id
+
+        # Upload TG files to Max and get tokens
+        max_attachments: list[Attachment] = []
+        for att in attachments or []:
+            if att.file_data:
+                token = await self._max_sender.upload_file(att.file_data, att.filename or "file")
+                if token:
+                    max_attachments.append(
+                        Attachment(type=att.type, token=token, filename=att.filename)
+                    )
+
+        await self._max_sender.send_to_client(chat, text, attachments=max_attachments or None)
 
     async def close_ticket(self, ticket_id: str, assistant_id: int, username: str) -> bool:
         """Close a ticket. Returns True if successful."""

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 
-from src.domain.models import Ticket, User
+from src.domain.models import Attachment, Ticket, User
 
 
 class RepositoryInterface(ABC):
@@ -48,7 +48,14 @@ class RepositoryInterface(ABC):
 
 class MaxSenderInterface(ABC):
     @abstractmethod
-    async def send_to_client(self, chat_id: int, text: str) -> int:
+    async def send_to_client(
+        self, chat_id: int, text: str, attachments: list[Attachment] | None = None
+    ) -> int:
+        pass
+
+    @abstractmethod
+    async def upload_file(self, file_data: bytes, filename: str) -> str | None:
+        """Upload a file to Max and return the attachment token."""
         pass
 
     @abstractmethod
@@ -111,4 +118,9 @@ class BotSenderInterface(ABC):
 
     @abstractmethod
     def get_taken_keyboard(self, ticket_id: str, username: str) -> Any:
+        pass
+
+    @abstractmethod
+    async def send_file_to_topic(self, chat_id: int, topic_id: int, attachment: Attachment) -> int:
+        """Download file by URL and send to TG topic as photo or document."""
         pass

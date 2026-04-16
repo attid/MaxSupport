@@ -1,5 +1,6 @@
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from src.application.monitoring import AlarmService, is_working_hours
 from src.domain.models import Ticket, TicketMessage, TicketStatus
@@ -42,7 +43,7 @@ async def test_alarm_sent_once_for_same_ticket(alarm_service, repo, sender):
         ],
     )
     # Make the message old enough (>2h)
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     ticket.messages[0].timestamp = datetime.now(timezone.utc) - timedelta(hours=3)
     repo.get_all_active_tickets.return_value = [ticket]

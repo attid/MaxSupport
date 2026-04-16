@@ -2,12 +2,14 @@
 
 from typing import Any
 
+import httpx
 import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.application.interfaces import BotSenderInterface
+from src.domain.models import Attachment, AttachmentType
 
 logger = structlog.get_logger()
 
@@ -79,3 +81,23 @@ class BotSender(BotSenderInterface):
         return InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=f"Взял @{username}", callback_data="none")]]
         )
+
+    async def send_file_to_topic(self, chat_id: int, topic_id: int, attachment: Attachment) -> int:
+        log = logger.bind(action="send_file_to_topic", att_type=attachment.type)
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as http:
+                r = await http.get(attachment.url)
+                r.raise_for_status()
+                file_data = r.content
+
+            filename = attachment.filename or "file"
+            input_file = BufferedInputFile(file_data, filename=filename)
+
+            if attachment.type == AttachmentType.IMAGE:
+                msg = await self._bot.send_photo(chat_id, input_file, message_thread_id=topic_id)
+            else:
+                msg = await self._bot.send_document(chat_id, input_file, message_thread_id=topic_id)
+            return msg.message_id
+        except Exception as e:
+            log.error("send_file_to_topic_error", error=str(e))
+            return 0

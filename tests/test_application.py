@@ -1,8 +1,10 @@
+from unittest.mock import ANY, AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, ANY
+
+from src.application.interfaces import BotSenderInterface, MaxSenderInterface, RepositoryInterface
 from src.application.use_cases import SupportService
-from src.application.interfaces import RepositoryInterface, BotSenderInterface, MaxSenderInterface
-from src.domain.models import Ticket, User, UserRole, TicketStatus
+from src.domain.models import Ticket, TicketStatus, User
 
 
 @pytest.fixture
@@ -35,22 +37,19 @@ async def test_handle_client_message_new_user_and_ticket(service, repo, sender):
     repo.get_active_ticket_by_client.return_value = None
     sender.create_forum_topic.return_value = 999
     sender.send_to_topic.return_value = 1000
-    
+
     # Act
     await service.handle_client_message(
-        client_id=client_id,
-        full_name="Test Client",
-        username="testclient",
-        text="Help me"
+        client_id=client_id, full_name="Test Client", username="testclient", text="Help me"
     )
-    
+
     # Assert
     repo.save_user.assert_called_once()
     repo.save_ticket.assert_called_once()
     sender.create_forum_topic.assert_called_once()
     sender.send_to_topic.assert_called_once()
     repo.save_message_mapping.assert_called_once_with(1000, ANY)
-    
+
     # Check ticket creation
     ticket = repo.save_ticket.call_args[0][0]
     assert ticket.client_id == client_id
@@ -66,20 +65,18 @@ async def test_handle_client_message_existing_ticket(service, repo, sender):
     repo.get_user.return_value = User(user_id=client_id, full_name="Test Client")
     repo.get_active_ticket_by_client.return_value = existing_ticket
     sender.send_to_topic.return_value = 2000
-    
+
     # Act
     await service.handle_client_message(
-        client_id=client_id,
-        full_name="Test Client",
-        text="Second message"
+        client_id=client_id, full_name="Test Client", text="Second message"
     )
-    
+
     # Assert
     repo.save_user.assert_not_called()
     repo.save_ticket.assert_called_once()
     sender.create_forum_topic.assert_not_called()
     sender.send_to_topic.assert_called_once()
-    
+
     assert len(existing_ticket.messages) == 1
     assert existing_ticket.messages[0].text == "Second message"
 
@@ -90,10 +87,10 @@ async def test_take_ticket_success(service, repo, sender):
     ticket_id = "test-uuid"
     ticket = Ticket(ticket_id=ticket_id, client_id=123, topic_id=999, status=TicketStatus.OPEN)
     repo.get_ticket.return_value = ticket
-    
+
     # Act
     await service.take_ticket(ticket_id, 888, "assistant_user")
-    
+
     # Assert
     assert ticket.status == TicketStatus.ASSIGNED
     assert ticket.assistant_id == 888
@@ -108,10 +105,10 @@ async def test_close_ticket_success(service, repo, sender, max_sender):
     ticket_id = "test-uuid"
     ticket = Ticket(ticket_id=ticket_id, client_id=123, topic_id=999)
     repo.get_ticket.return_value = ticket
-    
+
     # Act
     result = await service.close_ticket(ticket_id, 888, "assistant_user")
-    
+
     # Assert
     assert result is True
     assert ticket.status == TicketStatus.CLOSED
