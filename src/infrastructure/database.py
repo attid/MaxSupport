@@ -51,6 +51,7 @@ class TicketTable(Base):
     __tablename__ = "tickets"
     ticket_id: Mapped[str] = mapped_column(primary_key=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"))
+    max_chat_id: Mapped[Optional[int]] = mapped_column(nullable=True)
     assistant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.user_id"), nullable=True)
     topic_id: Mapped[Optional[int]] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="open")
@@ -79,6 +80,7 @@ def _row_to_ticket(row: TicketTable) -> Ticket:
     return Ticket(
         ticket_id=row.ticket_id,
         client_id=row.client_id,
+        max_chat_id=row.max_chat_id,
         assistant_id=row.assistant_id,
         topic_id=row.topic_id,
         status=TicketStatus(row.status),
@@ -154,6 +156,7 @@ class SQLiteRepository(RepositoryInterface):
                 TicketTable(
                     ticket_id=ticket.ticket_id,
                     client_id=ticket.client_id,
+                    max_chat_id=ticket.max_chat_id,
                     assistant_id=ticket.assistant_id,
                     topic_id=ticket.topic_id,
                     status=ticket.status.value,

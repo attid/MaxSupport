@@ -48,12 +48,12 @@ class MaxSender(MaxSenderInterface):
             log.error("max_api_error", error=str(e))
             return [], marker
 
-    async def send_to_client(self, client_id: int, text: str) -> int:
-        log = logger.bind(action="send_to_client", client_id=client_id)
+    async def send_to_client(self, chat_id: int, text: str) -> int:
+        log = logger.bind(action="send_to_client", chat_id=chat_id)
         try:
             response = await self._client.post(
                 "/messages",
-                json={"user_id": client_id, "text": text},
+                json={"chat_id": chat_id, "text": text},
             )
             response.raise_for_status()
             res_data = response.json()

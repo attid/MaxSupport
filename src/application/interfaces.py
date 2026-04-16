@@ -48,7 +48,7 @@ class RepositoryInterface(ABC):
 
 class MaxSenderInterface(ABC):
     @abstractmethod
-    async def send_to_client(self, client_id: int, text: str) -> int:
+    async def send_to_client(self, chat_id: int, text: str) -> int:
         pass
 
     @abstractmethod

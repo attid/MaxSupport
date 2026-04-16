@@ -37,6 +37,7 @@ class TicketMessage(BaseModel):
 class Ticket(BaseModel):
     ticket_id: str
     client_id: int
+    max_chat_id: Optional[int] = None
     assistant_id: Optional[int] = None
     topic_id: Optional[int] = None
     status: TicketStatus = TicketStatus.OPEN

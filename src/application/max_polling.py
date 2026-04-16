@@ -56,11 +56,16 @@ class MaxPollingService:
         body = message.get("body", {})
         text = body.get("text") if isinstance(body, dict) else message.get("text")
 
+        # chat_id from recipient or directly from message
+        recipient = message.get("recipient", {})
+        chat_id = recipient.get("chat_id") or message.get("chat_id")
+
         if client_id and text:
-            self.log.info("received_new_message", client_id=client_id, text=text)
+            self.log.info("received_new_message", client_id=client_id, chat_id=chat_id, text=text)
             await self.support_service.handle_client_message(
                 client_id=client_id,
                 full_name=full_name,
                 username=username,
                 text=text,
+                max_chat_id=chat_id,
             )

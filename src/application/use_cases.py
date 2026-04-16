@@ -69,6 +69,7 @@ class SupportService:
         text: str,
         username: str | None = None,
         force_new_ticket: bool = False,
+        max_chat_id: int | None = None,
     ) -> None:
         log = self.log.bind(client_id=client_id, full_name=full_name)
         log.info("handling_client_message", force_new_ticket=force_new_ticket)
@@ -104,6 +105,7 @@ class SupportService:
             ticket = Ticket(
                 ticket_id=ticket_id,
                 client_id=client_id,
+                max_chat_id=max_chat_id,
                 topic_id=topic_id,
             )
 
@@ -222,7 +224,7 @@ class SupportService:
         await self._repo.save_ticket(ticket)
 
         # ПОТОМ отправляем клиенту
-        await self._max_sender.send_to_client(ticket.client_id, text)
+        await self._max_sender.send_to_client(ticket.max_chat_id or ticket.client_id, text)
 
     async def close_ticket(self, ticket_id: str, assistant_id: int, username: str) -> bool:
         """Close a ticket. Returns True if successful."""
@@ -250,7 +252,7 @@ class SupportService:
 
         # Уведомляем клиента
         await self._max_sender.send_to_client(
-            ticket.client_id,
+            ticket.max_chat_id or ticket.client_id,
             "Ваш тикет закрыт. Если у вас возникнут новые вопросы, просто напишите нам!",
         )
 

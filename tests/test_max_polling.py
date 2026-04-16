@@ -27,6 +27,7 @@ async def test_process_update_with_text_message(polling, support_service):
         "message": {
             "sender": {"user_id": 123, "first_name": "Max", "last_name": "User", "username": "maxuser"},
             "body": {"text": "Hello"},
+            "recipient": {"chat_id": 456},
         },
     }
 
@@ -37,6 +38,7 @@ async def test_process_update_with_text_message(polling, support_service):
         full_name="Max User",
         username="maxuser",
         text="Hello",
+        max_chat_id=456,
     )
 
 
