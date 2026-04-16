@@ -84,9 +84,7 @@ class MaxSender(MaxSenderInterface):
     ) -> int:
         log = logger.bind(action="send_to_client", chat_id=chat_id)
         try:
-            body: dict = {}
-            if text:
-                body["text"] = text
+            body: dict = {"text": text or ""}
             if attachments:
                 # Uploaded tokens always work as "file" type
                 body["attachments"] = [
@@ -97,6 +95,12 @@ class MaxSender(MaxSenderInterface):
                 params={"chat_id": chat_id},
                 json=body,
             )
+            if response.status_code != 200:
+                log.error(
+                    "max_api_error",
+                    status=response.status_code,
+                    response_body=response.text,
+                )
             response.raise_for_status()
             return 0
         except Exception as e:
