@@ -5,6 +5,7 @@ import os
 
 import structlog
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.application.max_polling import MaxPollingService
@@ -55,7 +56,8 @@ async def main() -> None:
     await repo.init_db()
 
     # Telegram bot
-    bot = Bot(token=settings.telegram_bot_token)
+    session = AiohttpSession(api=settings.telegram_api_url)
+    bot = Bot(token=settings.telegram_bot_token, session=session)
     dp = Dispatcher()
 
     # DI — wire up interfaces

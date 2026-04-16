@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     max_bot_token: str
     assistants_chat_id: int
     db_url: str = "sqlite+aiosqlite:///./data.db"
+    telegram_api_url: str = "https://api.telegram.org"
 
     model_config = SettingsConfigDict(
         env_file=".env",

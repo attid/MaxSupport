@@ -53,6 +53,7 @@ docker compose up -d
 | `MAX_BOT_TOKEN` | Токен Max бота |
 | `ASSISTANTS_CHAT_ID` | ID форум-группы ассистентов |
 | `DB_URL` | URL базы данных (default: `sqlite+aiosqlite:///./data.db`) |
+| `TELEGRAM_API_URL` | URL Telegram Bot API (default: `https://api.telegram.org`) |
 
 ## Как работает
 

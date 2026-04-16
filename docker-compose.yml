@@ -10,6 +10,7 @@ services:
       MAX_BOT_TOKEN: ${MAX_BOT_TOKEN}
       ASSISTANTS_CHAT_ID: ${ASSISTANTS_CHAT_ID}
       DB_URL: sqlite+aiosqlite:////app/data/data.db
+      TELEGRAM_API_URL: ${TELEGRAM_API_URL:-https://api.telegram.org}
 
 volumes:
   data:
