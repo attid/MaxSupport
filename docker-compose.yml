@@ -6,7 +6,7 @@ services:
       - data:/app/data
     # Переменные окружения передаются через docker run -e или environment: секцию в compose
     environment:
-      BOT_TOKEN: ${BOT_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       MAX_BOT_TOKEN: ${MAX_BOT_TOKEN}
       ASSISTANTS_CHAT_ID: ${ASSISTANTS_CHAT_ID}
       DB_URL: sqlite+aiosqlite:////app/data/data.db

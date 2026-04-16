@@ -16,7 +16,7 @@ class MaxSender(MaxSenderInterface):
         self._client = httpx.AsyncClient(
             base_url=MAX_API_BASE_URL,
             headers={"Authorization": token},
-            timeout=30.0,
+            timeout=60.0,
         )
 
     async def close(self) -> None:
@@ -32,21 +32,21 @@ class MaxSender(MaxSenderInterface):
             log.error("max_api_error", error=str(e))
             return {}
 
-    async def get_updates(self, last_update_id: int) -> list[dict]:
-        log = logger.bind(action="get_updates", offset=last_update_id)
+    async def get_updates(self, marker: int | None) -> tuple[list[dict], int | None]:
+        log = logger.bind(action="get_updates", marker=marker)
         try:
-            response = await self._client.get(
-                "/updates",
-                params={"offset": last_update_id, "limit": 100},
-            )
+            params: dict = {"limit": 100, "timeout": 30}
+            if marker is not None:
+                params["marker"] = marker
+            response = await self._client.get("/updates", params=params)
             response.raise_for_status()
             data = response.json()
-            if isinstance(data, list):
-                return data
-            return data.get("results", [])
+            updates = data.get("updates", [])
+            new_marker = data.get("marker")
+            return updates, new_marker
         except Exception as e:
             log.error("max_api_error", error=str(e))
-            return []
+            return [], marker
 
     async def send_to_client(self, client_id: int, text: str) -> int:
         log = logger.bind(action="send_to_client", client_id=client_id)

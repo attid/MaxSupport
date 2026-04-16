@@ -23,10 +23,10 @@ def polling(max_sender, support_service):
 @pytest.mark.asyncio
 async def test_process_update_with_text_message(polling, support_service):
     update = {
-        "update_id": 42,
+        "update_type": "message_created",
         "message": {
-            "from": {"user_id": 123, "full_name": "Max User", "username": "maxuser"},
-            "text": "Hello",
+            "sender": {"user_id": 123, "first_name": "Max", "last_name": "User", "username": "maxuser"},
+            "body": {"text": "Hello"},
         },
     }
 
@@ -38,12 +38,18 @@ async def test_process_update_with_text_message(polling, support_service):
         username="maxuser",
         text="Hello",
     )
-    assert polling.last_update_id == 0  # Not updated in process_update
+
+
+@pytest.mark.asyncio
+async def test_process_update_ignores_non_message_created(polling, support_service):
+    update = {"update_type": "bot_started"}
+    await polling.process_update(update)
+    support_service.handle_client_message.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_process_update_ignores_no_message(polling, support_service):
-    update = {"update_id": 10}
+    update = {"update_type": "message_created"}
     await polling.process_update(update)
     support_service.handle_client_message.assert_not_called()
 
@@ -51,9 +57,10 @@ async def test_process_update_ignores_no_message(polling, support_service):
 @pytest.mark.asyncio
 async def test_process_update_ignores_no_text(polling, support_service):
     update = {
-        "update_id": 11,
+        "update_type": "message_created",
         "message": {
-            "from": {"user_id": 123, "full_name": "User"},
+            "sender": {"user_id": 123, "first_name": "User"},
+            "body": {},
         },
     }
     await polling.process_update(update)
@@ -65,17 +72,15 @@ async def test_poll_delay_resets_on_success(polling, max_sender):
     """After successful poll, delay should reset to initial value."""
     from src.application.max_polling import INITIAL_POLL_DELAY
 
-    max_sender.get_updates.return_value = [
-        {"update_id": 5, "message": {"from": {"user_id": 1}, "text": "hi"}}
-    ]
+    max_sender.get_updates.return_value = (
+        [{"update_type": "message_created", "message": {"sender": {"user_id": 1, "first_name": "U"}, "body": {"text": "hi"}}}],
+        42,
+    )
 
-    # Simulate one iteration of the loop logic
-    updates = await max_sender.get_updates(0)
+    updates, new_marker = await max_sender.get_updates(None)
     for update in updates:
         await polling.process_update(update)
-        uid = update.get("update_id")
-        if uid and uid >= polling.last_update_id:
-            polling.last_update_id = uid + 1
+    polling._marker = new_marker
 
-    assert polling.last_update_id == 6
+    assert polling._marker == 42
     assert polling._poll_delay == INITIAL_POLL_DELAY

@@ -21,7 +21,7 @@ uv sync
 
 # Создать .env файл
 cp .env.example .env
-# Заполнить BOT_TOKEN, MAX_BOT_TOKEN, ASSISTANTS_CHAT_ID
+# Заполнить TELEGRAM_BOT_TOKEN, MAX_BOT_TOKEN, ASSISTANTS_CHAT_ID
 
 # Запустить тесты
 just test
@@ -49,7 +49,7 @@ docker compose up -d
 
 | Переменная | Описание |
 |-----------|----------|
-| `BOT_TOKEN` | Токен Telegram бота |
+| `TELEGRAM_BOT_TOKEN` | Токен Telegram бота |
 | `MAX_BOT_TOKEN` | Токен Max бота |
 | `ASSISTANTS_CHAT_ID` | ID форум-группы ассистентов |
 | `DB_URL` | URL базы данных (default: `sqlite+aiosqlite:///./data.db`) |

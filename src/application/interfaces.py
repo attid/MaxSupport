@@ -57,8 +57,12 @@ class MaxSenderInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_updates(self, last_update_id: int) -> List[dict]:
-        """Fetch new messages from MAX platform."""
+    async def get_updates(self, marker: int | None) -> tuple[list[dict], int | None]:
+        """Fetch new updates from MAX platform.
+
+        Returns (updates, new_marker). The caller must pass new_marker
+        into the next call to avoid receiving duplicate updates.
+        """
         pass
 
 
