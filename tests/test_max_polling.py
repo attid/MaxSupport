@@ -2,9 +2,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.application.max_polling import MaxPollingService
 from src.application.use_cases import SupportService
-from src.domain.models import Attachment, AttachmentType
+from src.domain.models import AttachmentType
+from src.interface.max.polling import MaxPollingService
 
 
 @pytest.fixture
@@ -126,8 +126,63 @@ async def test_process_update_ignores_no_text_no_attachments(polling, support_se
 
 
 @pytest.mark.asyncio
+async def test_process_update_rejects_non_integer_sender_id(polling, support_service):
+    update = {
+        "update_type": "message_created",
+        "message": {
+            "sender": {"user_id": "123", "first_name": "User"},
+            "body": {"text": "Hello"},
+        },
+    }
+
+    await polling.process_update(update)
+
+    support_service.handle_client_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_update_ignores_malformed_attachments(polling, support_service):
+    update = {
+        "update_type": "message_created",
+        "message": {
+            "sender": {"user_id": 123, "first_name": "User"},
+            "body": {"attachments": {"type": "image"}},
+        },
+    }
+
+    await polling.process_update(update)
+
+    support_service.handle_client_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_updates_continues_after_one_update_fails(polling, support_service):
+    updates = [
+        {
+            "update_type": "message_created",
+            "message": {
+                "sender": {"user_id": 1, "first_name": "First"},
+                "body": {"text": "first"},
+            },
+        },
+        {
+            "update_type": "message_created",
+            "message": {
+                "sender": {"user_id": 2, "first_name": "Second"},
+                "body": {"text": "second"},
+            },
+        },
+    ]
+    support_service.handle_client_message.side_effect = [RuntimeError("failed"), None]
+
+    await polling.process_updates(updates)
+
+    assert support_service.handle_client_message.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_poll_delay_resets_on_success(polling, max_sender):
-    from src.application.max_polling import INITIAL_POLL_DELAY
+    from src.interface.max.polling import INITIAL_POLL_DELAY
 
     max_sender.get_updates.return_value = (
         [

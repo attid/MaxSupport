@@ -45,6 +45,9 @@ class AlarmService:
         for ticket in active_tickets:
             if not ticket.messages:
                 continue
+            if ticket.topic_id is None:
+                self.log.warning("ticket_without_topic", ticket_id=ticket.ticket_id)
+                continue
 
             last_msg = ticket.messages[-1]
             # Only alarm if last message is from client and ticket is not yet alarmed

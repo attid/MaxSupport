@@ -89,3 +89,22 @@ async def test_no_alarm_for_assistant_reply(alarm_service, repo, sender):
 
     await alarm_service.check_tickets()
     sender.send_to_topic.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_no_alarm_for_ticket_without_topic(alarm_service, repo, sender):
+    from datetime import datetime, timedelta, timezone
+
+    ticket = Ticket(
+        ticket_id="missing-topic",
+        client_id=100,
+        topic_id=None,
+        status=TicketStatus.OPEN,
+        messages=[TicketMessage(sender_id=100, text="help")],
+    )
+    ticket.messages[0].timestamp = datetime.now(timezone.utc) - timedelta(hours=3)
+    repo.get_all_active_tickets.return_value = [ticket]
+
+    await alarm_service.check_tickets()
+
+    sender.send_to_topic.assert_not_called()

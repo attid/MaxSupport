@@ -1,6 +1,7 @@
 import asyncio
 
 import structlog
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.application.interfaces import MaxSenderInterface
 from src.application.use_cases import SupportService
@@ -19,6 +20,61 @@ _DEFAULT_EXTENSIONS = {
     "audio": "mp3",
     "file": "bin",
 }
+
+
+class _MaxAttachmentPayload(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    url: str = ""
+    token: str | None = None
+    mid: str | int | None = None
+    id: str | int | None = None
+
+
+class _MaxAttachment(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    type: str
+    payload: _MaxAttachmentPayload = Field(default_factory=_MaxAttachmentPayload)
+    filename: str | None = None
+
+
+class _MaxBody(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    text: str | None = None
+    attachments: list[_MaxAttachment] = Field(default_factory=list)
+
+
+class _MaxSender(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    user_id: int
+    first_name: str = ""
+    last_name: str | None = None
+    username: str | None = None
+
+
+class _MaxRecipient(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    chat_id: int | None = None
+
+
+class _MaxMessage(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    sender: _MaxSender
+    body: _MaxBody = Field(default_factory=_MaxBody)
+    recipient: _MaxRecipient = Field(default_factory=_MaxRecipient)
+    chat_id: int | None = None
+
+
+class _MaxUpdate(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    update_type: str
+    message: _MaxMessage
 
 
 def _default_filename(att_type: str, payload: dict) -> str:
@@ -43,8 +99,7 @@ class MaxPollingService:
                 updates, new_marker = await self.max_sender.get_updates(self._marker)
                 if new_marker is not None:
                     self._marker = new_marker
-                for update in updates:
-                    await self.process_update(update)
+                await self.process_updates(updates)
 
                 # Reset delay on success
                 self._poll_delay = INITIAL_POLL_DELAY
@@ -55,50 +110,63 @@ class MaxPollingService:
 
             await asyncio.sleep(self._poll_delay)
 
+    async def process_updates(self, updates: list[dict]) -> None:
+        for index, update in enumerate(updates):
+            try:
+                await self.process_update(update)
+            except Exception as error:
+                self.log.error(
+                    "update_processing_error",
+                    update_index=index,
+                    error_type=type(error).__name__,
+                    error=str(error),
+                )
+
     async def process_update(self, update: dict) -> None:
         if update.get("update_type") != "message_created":
             return
 
-        message = update.get("message")
-        if not message:
+        try:
+            parsed = _MaxUpdate.model_validate(update)
+        except ValidationError as error:
+            self.log.warning("invalid_max_update", validation_errors=error.error_count())
             return
 
-        sender = message.get("sender", {})
-        client_id = sender.get("user_id")
-        first_name = sender.get("first_name", "")
-        last_name = sender.get("last_name") or ""
+        message = parsed.message
+        sender = message.sender
+        client_id = sender.user_id
+        first_name = sender.first_name
+        last_name = sender.last_name or ""
         full_name = f"{first_name} {last_name}".strip() or "Unknown Max User"
-        username = sender.get("username")
-        body = message.get("body", {})
-        text = body.get("text") if isinstance(body, dict) else message.get("text")
+        username = sender.username
+        body = message.body
+        text = body.text
 
         # chat_id from recipient
-        recipient = message.get("recipient", {})
-        chat_id = recipient.get("chat_id") or message.get("chat_id")
+        chat_id = message.recipient.chat_id or message.chat_id
 
         # Parse attachments
-        raw_attachments = body.get("attachments", []) if isinstance(body, dict) else []
         attachments: list[Attachment] = []
         has_unsupported = False
 
-        for att in raw_attachments:
-            att_type = att.get("type", "")
+        for att in body.attachments:
+            att_type = att.type
             if att_type in SUPPORTED_ATTACHMENT_TYPES:
-                payload = att.get("payload", {})
-                filename = att.get("filename") or _default_filename(att_type, payload)
+                payload = att.payload
+                filename = att.filename or _default_filename(
+                    att_type,
+                    {"mid": payload.mid, "id": payload.id},
+                )
                 attachments.append(
                     Attachment(
                         type=AttachmentType(att_type),
-                        url=payload.get("url", ""),
+                        url=payload.url,
                         filename=filename,
-                        token=payload.get("token"),
+                        token=payload.token,
                     )
                 )
             else:
                 has_unsupported = True
-
-        if not client_id:
-            return
 
         # Reply about unsupported format if there's nothing useful
         if has_unsupported and not attachments and not text:

@@ -29,8 +29,10 @@ class BotSender(BotSenderInterface):
     def assistants_chat_id(self) -> int:
         return self._assistants_chat_id
 
-    async def send_to_assistant(self, aid: int, text: str, reply_markup: Any = None) -> int:
-        msg = await self._bot.send_message(aid, text, reply_markup=reply_markup)
+    async def send_to_assistant(
+        self, assistant_id: int, text: str, reply_markup: Any = None
+    ) -> int:
+        msg = await self._bot.send_message(assistant_id, text, reply_markup=reply_markup)
         return msg.message_id
 
     async def send_to_topic(
@@ -94,6 +96,7 @@ class BotSender(BotSenderInterface):
             att_type=attachment.type,
             url=attachment.url[:80] if attachment.url else None,
         )
+        local_path: Path | None = None
         try:
             filename = attachment.filename or "file"
             local_path = ATTACHMENTS_DIR / f"{uuid.uuid4()}_{filename}"
@@ -116,3 +119,6 @@ class BotSender(BotSenderInterface):
         except Exception as e:
             log.error("send_file_to_topic_error", error=str(e))
             return 0
+        finally:
+            if local_path is not None:
+                local_path.unlink(missing_ok=True)

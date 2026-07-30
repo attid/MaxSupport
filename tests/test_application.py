@@ -127,3 +127,21 @@ async def test_is_assistant(service, sender):
     # Not a member → False
     sender.is_chat_member.return_value = False
     assert await service.is_assistant(2) is False
+
+
+@pytest.mark.asyncio
+async def test_existing_ticket_without_topic_is_rejected(service, repo):
+    client_id = 123
+    repo.get_user.return_value = User(user_id=client_id, full_name="Test Client")
+    repo.get_active_ticket_by_client.return_value = Ticket(
+        ticket_id="broken-ticket",
+        client_id=client_id,
+        topic_id=None,
+    )
+
+    with pytest.raises(ValueError, match="has no Telegram topic"):
+        await service.handle_client_message(
+            client_id=client_id,
+            full_name="Test Client",
+            text="Second message",
+        )

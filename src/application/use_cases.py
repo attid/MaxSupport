@@ -18,6 +18,12 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def require_topic_id(ticket: Ticket) -> int:
+    if ticket.topic_id is None:
+        raise ValueError(f"Ticket {ticket.ticket_id} has no Telegram topic")
+    return ticket.topic_id
+
+
 class SupportService:
     def __init__(
         self,
@@ -110,6 +116,8 @@ class SupportService:
                 topic_id=topic_id,
             )
 
+        topic_id = require_topic_id(ticket)
+
         # Добавляем сообщение
         msg = TicketMessage(sender_id=client_id, text=text)
         ticket.messages.append(msg)
@@ -123,7 +131,7 @@ class SupportService:
             # Первое сообщение в топике
             msg_id = await self._sender.send_to_topic(
                 self._sender.assistants_chat_id,
-                ticket.topic_id,
+                topic_id,
                 f"Новый тикет от {full_name} (@{username or 'no_user'}):\n\n{text}",
                 reply_markup=kb,
             )
@@ -132,7 +140,7 @@ class SupportService:
             # Пересылаем вложения
             for att in attachments or []:
                 await self._sender.send_file_to_topic(
-                    self._sender.assistants_chat_id, ticket.topic_id, att
+                    self._sender.assistants_chat_id, topic_id, att
                 )
         else:
             # Если тикет был взят (желтый), а клиент написал — снова делаем красным 🔴
@@ -140,14 +148,14 @@ class SupportService:
                 log.info("marking_assigned_ticket_as_red_due_to_client_message")
                 new_name = f"🔴 Ждет ответа: {full_name}"
                 await self._sender.edit_forum_topic(
-                    self._sender.assistants_chat_id, ticket.topic_id, new_name
+                    self._sender.assistants_chat_id, topic_id, new_name
                 )
 
             # Дополнительное сообщение в существующий топик
             kb_close = self._sender.get_close_keyboard(ticket.ticket_id)
             msg_id = await self._sender.send_to_topic(
                 self._sender.assistants_chat_id,
-                ticket.topic_id,
+                topic_id,
                 f"Клиент добавил:\n{text}",
                 reply_markup=kb_close,
             )
@@ -156,7 +164,7 @@ class SupportService:
             # Пересылаем вложения
             for att in attachments or []:
                 await self._sender.send_file_to_topic(
-                    self._sender.assistants_chat_id, ticket.topic_id, att
+                    self._sender.assistants_chat_id, topic_id, att
                 )
 
     async def take_ticket(self, ticket_id: str, assistant_id: int, username: str) -> None:
@@ -168,6 +176,7 @@ class SupportService:
             log.warning("ticket_not_eligible_for_taking")
             return
 
+        topic_id = require_topic_id(ticket)
         await self._ensure_assistant(assistant_id, username)
 
         ticket.status = TicketStatus.ASSIGNED
@@ -177,16 +186,14 @@ class SupportService:
 
         # Обновляем имя топика
         new_name = f"🟡 Взял @{username}: {ticket.client_id}"
-        await self._sender.edit_forum_topic(
-            self._sender.assistants_chat_id, ticket.topic_id, new_name
-        )
+        await self._sender.edit_forum_topic(self._sender.assistants_chat_id, topic_id, new_name)
 
         # Мы не можем легко найти сообщение с кнопкой "Взять" без message_id,
         # но мы можем отправить новое сообщение в топик или просто оставить как есть.
         # В идеале нужно хранить message_id первого сообщения.
         await self._sender.send_to_topic(
             self._sender.assistants_chat_id,
-            ticket.topic_id,
+            topic_id,
             f"Ассистент @{username} взял тикет в работу.",
             reply_markup=self._sender.get_close_keyboard(ticket_id),
         )
@@ -207,6 +214,7 @@ class SupportService:
             log.warning("ticket_not_found")
             return
 
+        topic_id = require_topic_id(ticket)
         await self._ensure_assistant(assistant_id, username or str(assistant_id))
 
         # Если тикет был OPEN, переводим в ASSIGNED
@@ -224,9 +232,7 @@ class SupportService:
             assistant_name = str(assistant_id)
 
         new_name = f"🟡 Взял @{assistant_name}: {ticket.client_id}"
-        await self._sender.edit_forum_topic(
-            self._sender.assistants_chat_id, ticket.topic_id, new_name
-        )
+        await self._sender.edit_forum_topic(self._sender.assistants_chat_id, topic_id, new_name)
 
         # Сохраняем сообщение
         msg = TicketMessage(sender_id=assistant_id, text=text)
@@ -261,18 +267,17 @@ class SupportService:
         if not ticket:
             return False
 
+        topic_id = require_topic_id(ticket)
         ticket.status = TicketStatus.CLOSED
         await self._repo.save_ticket(ticket)
 
         # Обновляем имя топика
         new_name = f"🟢 Закрыл @{username}: {ticket.client_id}"
-        await self._sender.edit_forum_topic(
-            self._sender.assistants_chat_id, ticket.topic_id, new_name
-        )
+        await self._sender.edit_forum_topic(self._sender.assistants_chat_id, topic_id, new_name)
 
         await self._sender.send_to_topic(
             self._sender.assistants_chat_id,
-            ticket.topic_id,
+            topic_id,
             f"Тикет закрыт ассистентом @{username}.",
         )
 
