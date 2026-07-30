@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, time, timezone
+from datetime import UTC, datetime, time
 
 import structlog
 
@@ -13,7 +13,7 @@ WORKING_END = time(15, 0)  # 18:00 MSK = 15:00 UTC
 
 
 def is_working_hours() -> bool:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     current_time = now.time()
     return WORKING_START <= current_time <= WORKING_END
 
@@ -40,7 +40,7 @@ class AlarmService:
 
     async def check_tickets(self) -> None:
         active_tickets = await self.repo.get_all_active_tickets()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for ticket in active_tickets:
             if not ticket.messages:

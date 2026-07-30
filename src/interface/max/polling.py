@@ -1,7 +1,7 @@
 import asyncio
 
 import structlog
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from src.application.interfaces import MaxSenderInterface
 from src.application.use_cases import SupportService
@@ -37,6 +37,12 @@ class _MaxAttachment(BaseModel):
     type: str
     payload: _MaxAttachmentPayload = Field(default_factory=_MaxAttachmentPayload)
     filename: str | None = None
+
+    @model_validator(mode="after")
+    def supported_attachment_has_download_url(self) -> "_MaxAttachment":
+        if self.type in SUPPORTED_ATTACHMENT_TYPES and not self.payload.url:
+            raise ValueError("supported attachment requires payload.url")
+        return self
 
 
 class _MaxBody(BaseModel):

@@ -11,22 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
       with:
         enable-cache: true
         python-version: "3.13"
 
     - name: Install dependencies
-      run: uv sync
+      run: uv sync --frozen
+
+    - name: Check lockfile
+      run: uv lock --check
 
     - name: Check formatting
-      run: uv run ruff format --check src
+      run: uv run ruff format --check src tests .linters
 
-    - name: Run Linters
-      run: uv run ruff check src
+    - name: Run linters
+      run: |
+        uv run ruff check src tests .linters
+        uv run pyright
 
-    - name: Run Tests
+    - name: Check architecture
+      run: uv run python .linters/check_architecture.py
+
+    - name: Run tests
       run: PYTHONPATH=. uv run pytest tests

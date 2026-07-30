@@ -1,6 +1,5 @@
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import structlog
 
@@ -15,7 +14,7 @@ logger = structlog.get_logger()
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def require_topic_id(ticket: Ticket) -> int:
@@ -44,10 +43,6 @@ class SupportService:
     def sender(self) -> BotSenderInterface:
         return self._sender
 
-    @property
-    def max_sender(self) -> MaxSenderInterface:
-        return self._max_sender
-
     async def is_assistant(self, user_id: int) -> bool:
         """Check if user is a member of the assistants chat."""
         return await self._sender.is_chat_member(self._sender.assistants_chat_id, user_id)
@@ -64,7 +59,7 @@ class SupportService:
             )
             await self._repo.save_user(user)
 
-    async def get_ticket_id_by_message(self, message_id: int) -> Optional[str]:
+    async def get_ticket_id_by_message(self, message_id: int) -> str | None:
         """Get ticket ID associated with a message."""
         return await self._repo.get_ticket_id_by_message(message_id)
 
@@ -81,7 +76,6 @@ class SupportService:
         log = self.log.bind(client_id=client_id, full_name=full_name)
         log.info("handling_client_message", force_new_ticket=force_new_ticket)
 
-        # Обеспечиваем наличие пользователя
         user = await self._repo.get_user(client_id)
         if not user:
             log.info("creating_new_user")
@@ -93,7 +87,6 @@ class SupportService:
             )
             await self._repo.save_user(user)
 
-        # Ищем активный тикет
         ticket = None
         if not force_new_ticket:
             ticket = await self._repo.get_active_ticket_by_client(client_id)
@@ -103,7 +96,6 @@ class SupportService:
         if is_new_ticket:
             log.info("creating_new_ticket_and_topic")
             ticket_id = str(uuid.uuid4())
-            # Создаем топик в группе ассистентов
             topic_name = f"🔴 Новый вопрос: {full_name}"
             topic_id = await self._sender.create_forum_topic(
                 self._sender.assistants_chat_id, topic_name
@@ -118,17 +110,13 @@ class SupportService:
 
         topic_id = require_topic_id(ticket)
 
-        # Добавляем сообщение
         msg = TicketMessage(sender_id=client_id, text=text)
         ticket.messages.append(msg)
 
-        # СНАЧАЛА СОХРАНЯЕМ
         await self._repo.save_ticket(ticket)
 
-        # ПОТОМ уведомляем в топик
         kb = self._sender.get_take_keyboard(ticket.ticket_id)
         if is_new_ticket:
-            # Первое сообщение в топике
             msg_id = await self._sender.send_to_topic(
                 self._sender.assistants_chat_id,
                 topic_id,
@@ -137,7 +125,6 @@ class SupportService:
             )
             if msg_id:
                 await self._repo.save_message_mapping(msg_id, ticket.ticket_id)
-            # Пересылаем вложения
             for att in attachments or []:
                 await self._sender.send_file_to_topic(
                     self._sender.assistants_chat_id, topic_id, att
@@ -151,7 +138,6 @@ class SupportService:
                     self._sender.assistants_chat_id, topic_id, new_name
                 )
 
-            # Дополнительное сообщение в существующий топик
             kb_close = self._sender.get_close_keyboard(ticket.ticket_id)
             msg_id = await self._sender.send_to_topic(
                 self._sender.assistants_chat_id,
@@ -161,7 +147,6 @@ class SupportService:
             )
             if msg_id:
                 await self._repo.save_message_mapping(msg_id, ticket.ticket_id)
-            # Пересылаем вложения
             for att in attachments or []:
                 await self._sender.send_file_to_topic(
                     self._sender.assistants_chat_id, topic_id, att
@@ -184,7 +169,6 @@ class SupportService:
         ticket.taken_at = utc_now()
         await self._repo.save_ticket(ticket)
 
-        # Обновляем имя топика
         new_name = f"🟡 Взял @{username}: {ticket.client_id}"
         await self._sender.edit_forum_topic(self._sender.assistants_chat_id, topic_id, new_name)
 
@@ -217,14 +201,11 @@ class SupportService:
         topic_id = require_topic_id(ticket)
         await self._ensure_assistant(assistant_id, username or str(assistant_id))
 
-        # Если тикет был OPEN, переводим в ASSIGNED
         if ticket.status == TicketStatus.OPEN:
             ticket.status = TicketStatus.ASSIGNED
             ticket.assistant_id = assistant_id
             ticket.taken_at = utc_now()
 
-        # Возвращаем желтый статус 🟡 в названии топика после ответа ассистента
-        # Получаем данные ассистента (для username)
         assistant = await self._repo.get_user(assistant_id)
         if assistant:
             assistant_name = assistant.username or assistant.full_name
@@ -234,17 +215,13 @@ class SupportService:
         new_name = f"🟡 Взял @{assistant_name}: {ticket.client_id}"
         await self._sender.edit_forum_topic(self._sender.assistants_chat_id, topic_id, new_name)
 
-        # Сохраняем сообщение
         msg = TicketMessage(sender_id=assistant_id, text=text)
         ticket.messages.append(msg)
 
-        # СНАЧАЛА СОХРАНЯЕМ
         await self._repo.save_ticket(ticket)
 
-        # ПОТОМ отправляем клиенту
         chat = ticket.max_chat_id or ticket.client_id
 
-        # Upload TG files to Max and get tokens
         max_attachments: list[Attachment] = []
         for att in attachments or []:
             if att.file_data:
@@ -271,7 +248,6 @@ class SupportService:
         ticket.status = TicketStatus.CLOSED
         await self._repo.save_ticket(ticket)
 
-        # Обновляем имя топика
         new_name = f"🟢 Закрыл @{username}: {ticket.client_id}"
         await self._sender.edit_forum_topic(self._sender.assistants_chat_id, topic_id, new_name)
 
@@ -281,7 +257,6 @@ class SupportService:
             f"Тикет закрыт ассистентом @{username}.",
         )
 
-        # Уведомляем клиента
         if notify_client:
             await self._max_sender.send_to_client(
                 ticket.max_chat_id or ticket.client_id,
@@ -298,23 +273,19 @@ class SupportService:
         if not ticket:
             return
 
-        # Находим последнее сообщение клиента
         last_client_msg = None
         for msg in reversed(ticket.messages):
             if msg.sender_id == ticket.client_id:
                 last_client_msg = msg
                 break
 
-        # Закрываем текущий без уведомления клиента
         await self.close_ticket(ticket_id, assistant_id, username, notify_client=False)
 
-        # Уведомляем клиента о переводе
         await self._max_sender.send_to_client(
             ticket.max_chat_id or ticket.client_id,
             "Ваш вопрос переведён в новое обращение.",
         )
 
-        # Создаём новый тикет из последнего сообщения клиента
         if last_client_msg:
             client = await self._repo.get_user(ticket.client_id)
             full_name = client.full_name if client else str(ticket.client_id)

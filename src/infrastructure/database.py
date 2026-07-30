@@ -1,6 +1,6 @@
 import json
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
+from typing import overload
 
 from sqlalchemy import (
     DateTime,
@@ -32,7 +32,23 @@ def setup_sqlite_engine(engine) -> None:
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
+
+
+@overload
+def _as_utc(value: datetime) -> datetime: ...
+
+
+@overload
+def _as_utc(value: None) -> None: ...
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 class Base(DeclarativeBase):
@@ -42,7 +58,7 @@ class Base(DeclarativeBase):
 class UserTable(Base):
     __tablename__ = "users"
     user_id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[Optional[str]] = mapped_column(String(255))
+    username: Mapped[str | None] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), default="client")
 
@@ -51,13 +67,13 @@ class TicketTable(Base):
     __tablename__ = "tickets"
     ticket_id: Mapped[str] = mapped_column(primary_key=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"))
-    max_chat_id: Mapped[Optional[int]] = mapped_column(nullable=True)
-    assistant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.user_id"), nullable=True)
-    topic_id: Mapped[Optional[int]] = mapped_column(nullable=True)
+    max_chat_id: Mapped[int | None] = mapped_column(nullable=True)
+    assistant_id: Mapped[int | None] = mapped_column(ForeignKey("users.user_id"), nullable=True)
+    topic_id: Mapped[int | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="open")
     messages_json: Mapped[str] = mapped_column(Text, default="[]")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
-    taken_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class MessageMappingTable(Base):
@@ -85,8 +101,8 @@ def _row_to_ticket(row: TicketTable) -> Ticket:
         topic_id=row.topic_id,
         status=TicketStatus(row.status),
         messages=msgs,
-        created_at=row.created_at,
-        taken_at=row.taken_at,
+        created_at=_as_utc(row.created_at),
+        taken_at=_as_utc(row.taken_at),
     )
 
 
@@ -99,7 +115,7 @@ class SQLiteRepository(RepositoryInterface):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-    async def get_user(self, user_id: int) -> Optional[User]:
+    async def get_user(self, user_id: int) -> User | None:
         async with self.session_factory() as session:
             res = await session.execute(select(UserTable).where(UserTable.user_id == user_id))
             row = res.scalar_one_or_none()
@@ -117,7 +133,7 @@ class SQLiteRepository(RepositoryInterface):
             )
             await session.commit()
 
-    async def get_ticket(self, ticket_id: str) -> Optional[Ticket]:
+    async def get_ticket(self, ticket_id: str) -> Ticket | None:
         async with self.session_factory() as session:
             res = await session.execute(
                 select(TicketTable).where(TicketTable.ticket_id == ticket_id)
@@ -125,20 +141,20 @@ class SQLiteRepository(RepositoryInterface):
             row = res.scalar_one_or_none()
             return _row_to_ticket(row) if row else None
 
-    async def get_all_active_tickets(self) -> List[Ticket]:
+    async def get_all_active_tickets(self) -> list[Ticket]:
         async with self.session_factory() as session:
             res = await session.execute(
                 select(TicketTable).where(TicketTable.status != TicketStatus.CLOSED.value)
             )
             return [_row_to_ticket(row) for row in res.scalars().all()]
 
-    async def get_ticket_by_topic(self, topic_id: int) -> Optional[Ticket]:
+    async def get_ticket_by_topic(self, topic_id: int) -> Ticket | None:
         async with self.session_factory() as session:
             res = await session.execute(select(TicketTable).where(TicketTable.topic_id == topic_id))
             row = res.scalar_one_or_none()
             return _row_to_ticket(row) if row else None
 
-    async def get_active_ticket_by_client(self, client_id: int) -> Optional[Ticket]:
+    async def get_active_ticket_by_client(self, client_id: int) -> Ticket | None:
         async with self.session_factory() as session:
             res = await session.execute(
                 select(TicketTable).where(
@@ -167,7 +183,7 @@ class SQLiteRepository(RepositoryInterface):
             )
             await session.commit()
 
-    async def get_available_assistants(self) -> List[User]:
+    async def get_available_assistants(self) -> list[User]:
         async with self.session_factory() as session:
             res = await session.execute(
                 select(UserTable).where(UserTable.role == UserRole.ASSISTANT.value)
@@ -179,7 +195,7 @@ class SQLiteRepository(RepositoryInterface):
             await session.merge(MessageMappingTable(message_id=message_id, ticket_id=ticket_id))
             await session.commit()
 
-    async def get_ticket_id_by_message(self, message_id: int) -> Optional[str]:
+    async def get_ticket_id_by_message(self, message_id: int) -> str | None:
         async with self.session_factory() as session:
             res = await session.execute(
                 select(MessageMappingTable.ticket_id).where(

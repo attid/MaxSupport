@@ -4,13 +4,13 @@ services:
     restart: always
     volumes:
       - data:/app/data
-    # Переменные окружения передаются через docker run -e или environment: секцию в compose
     environment:
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      MAX_BOT_TOKEN: ${MAX_BOT_TOKEN}
-      ASSISTANTS_CHAT_ID: ${ASSISTANTS_CHAT_ID}
+      TELEGRAM_BOT_TOKEN: change_me
+      MAX_BOT_TOKEN: change_me
+      ASSISTANTS_CHAT_ID: -1000000000000
       DB_URL: sqlite+aiosqlite:////app/data/data.db
-      TELEGRAM_API_URL: ${TELEGRAM_API_URL:-https://api.telegram.org}
+      TELEGRAM_API_URL: https://api.telegram.org
+      LOG_FORMAT: json
 
 volumes:
   data:

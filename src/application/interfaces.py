@@ -1,24 +1,24 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from typing import Any
 
 from src.domain.models import Attachment, Ticket, User
 
 
 class RepositoryInterface(ABC):
     @abstractmethod
-    async def get_ticket(self, ticket_id: str) -> Optional[Ticket]:
+    async def get_ticket(self, ticket_id: str) -> Ticket | None:
         pass
 
     @abstractmethod
-    async def get_active_ticket_by_client(self, client_id: int) -> Optional[Ticket]:
+    async def get_active_ticket_by_client(self, client_id: int) -> Ticket | None:
         pass
 
     @abstractmethod
-    async def get_all_active_tickets(self) -> List[Ticket]:
+    async def get_all_active_tickets(self) -> list[Ticket]:
         pass
 
     @abstractmethod
-    async def get_ticket_by_topic(self, topic_id: int) -> Optional[Ticket]:
+    async def get_ticket_by_topic(self, topic_id: int) -> Ticket | None:
         pass
 
     @abstractmethod
@@ -26,7 +26,7 @@ class RepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_user(self, user_id: int) -> Optional[User]:
+    async def get_user(self, user_id: int) -> User | None:
         pass
 
     @abstractmethod
@@ -34,7 +34,7 @@ class RepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_available_assistants(self) -> List[User]:
+    async def get_available_assistants(self) -> list[User]:
         pass
 
     @abstractmethod
@@ -42,7 +42,7 @@ class RepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_ticket_id_by_message(self, message_id: int) -> Optional[str]:
+    async def get_ticket_id_by_message(self, message_id: int) -> str | None:
         pass
 
 
@@ -86,13 +86,13 @@ class BotSenderInterface(ABC):
 
     @abstractmethod
     async def send_to_assistant(
-        self, assistant_id: int, text: str, reply_markup: Optional[Any] = None
+        self, assistant_id: int, text: str, reply_markup: Any | None = None
     ) -> int:
         pass
 
     @abstractmethod
     async def send_to_topic(
-        self, chat_id: int, topic_id: int, text: str, reply_markup: Optional[Any] = None
+        self, chat_id: int, topic_id: int, text: str, reply_markup: Any | None = None
     ) -> int:
         pass
 

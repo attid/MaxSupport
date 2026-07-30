@@ -1,3 +1,4 @@
+from datetime import UTC
 from unittest.mock import AsyncMock
 
 import pytest
@@ -43,9 +44,9 @@ async def test_alarm_sent_once_for_same_ticket(alarm_service, repo, sender):
         ],
     )
     # Make the message old enough (>2h)
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    ticket.messages[0].timestamp = datetime.now(timezone.utc) - timedelta(hours=3)
+    ticket.messages[0].timestamp = datetime.now(UTC) - timedelta(hours=3)
     repo.get_all_active_tickets.return_value = [ticket]
 
     # First check — alarm sent
@@ -93,7 +94,7 @@ async def test_no_alarm_for_assistant_reply(alarm_service, repo, sender):
 
 @pytest.mark.asyncio
 async def test_no_alarm_for_ticket_without_topic(alarm_service, repo, sender):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     ticket = Ticket(
         ticket_id="missing-topic",
@@ -102,7 +103,7 @@ async def test_no_alarm_for_ticket_without_topic(alarm_service, repo, sender):
         status=TicketStatus.OPEN,
         messages=[TicketMessage(sender_id=100, text="help")],
     )
-    ticket.messages[0].timestamp = datetime.now(timezone.utc) - timedelta(hours=3)
+    ticket.messages[0].timestamp = datetime.now(UTC) - timedelta(hours=3)
     repo.get_all_active_tickets.return_value = [ticket]
 
     await alarm_service.check_tickets()

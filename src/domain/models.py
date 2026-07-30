@@ -1,16 +1,15 @@
-from datetime import datetime, timezone
-from enum import Enum
-from typing import List, Optional
+from datetime import UTC, datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
 def utc_now() -> datetime:
     """Return current UTC time with timezone info."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
-class AttachmentType(str, Enum):
+class AttachmentType(StrEnum):
     IMAGE = "image"
     FILE = "file"
     AUDIO = "audio"
@@ -24,19 +23,19 @@ class Attachment(BaseModel):
     file_data: bytes | None = None
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     CLIENT = "client"
     ASSISTANT = "assistant"
 
 
 class User(BaseModel):
     user_id: int
-    username: Optional[str] = None
+    username: str | None = None
     full_name: str
     role: UserRole = UserRole.CLIENT
 
 
-class TicketStatus(str, Enum):
+class TicketStatus(StrEnum):
     OPEN = "open"
     ASSIGNED = "assigned"
     CLOSED = "closed"
@@ -51,10 +50,10 @@ class TicketMessage(BaseModel):
 class Ticket(BaseModel):
     ticket_id: str
     client_id: int
-    max_chat_id: Optional[int] = None
-    assistant_id: Optional[int] = None
-    topic_id: Optional[int] = None
+    max_chat_id: int | None = None
+    assistant_id: int | None = None
+    topic_id: int | None = None
     status: TicketStatus = TicketStatus.OPEN
-    messages: List[TicketMessage] = Field(default_factory=list)
+    messages: list[TicketMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
-    taken_at: Optional[datetime] = None
+    taken_at: datetime | None = None

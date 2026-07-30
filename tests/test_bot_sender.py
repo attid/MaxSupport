@@ -42,3 +42,27 @@ async def test_send_file_to_topic_removes_temporary_file(monkeypatch, tmp_path):
 
     assert message_id == 42
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_send_file_to_topic_sanitizes_external_filename(monkeypatch, tmp_path):
+    bot = AsyncMock()
+    bot.send_document.return_value = SimpleNamespace(message_id=42)
+    monkeypatch.setattr(bot_sender_module, "ATTACHMENTS_DIR", tmp_path)
+    monkeypatch.setattr(
+        bot_sender_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: FakeHttpClient(),
+    )
+    sender = BotSender(bot, assistants_chat_id=-100)
+    attachment = Attachment(
+        type=AttachmentType.FILE,
+        url="https://example.com/document.pdf",
+        filename="../document.pdf",
+    )
+
+    message_id = await sender.send_file_to_topic(-100, 123, attachment)
+
+    assert message_id == 42
+    assert bot.send_document.await_args.args[1].filename == "document.pdf"
+    assert list(tmp_path.iterdir()) == []

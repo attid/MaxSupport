@@ -156,6 +156,28 @@ async def test_process_update_ignores_malformed_attachments(polling, support_ser
 
 
 @pytest.mark.asyncio
+async def test_process_update_rejects_attachment_without_download_url(polling, support_service):
+    update = {
+        "update_type": "message_created",
+        "message": {
+            "sender": {"user_id": 123, "first_name": "User"},
+            "body": {
+                "attachments": [
+                    {
+                        "type": "image",
+                        "payload": {},
+                    }
+                ]
+            },
+        },
+    }
+
+    await polling.process_update(update)
+
+    support_service.handle_client_message.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_process_updates_continues_after_one_update_fails(polling, support_service):
     updates = [
         {

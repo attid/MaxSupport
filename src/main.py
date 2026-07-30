@@ -2,6 +2,9 @@
 
 import asyncio
 import os
+from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack, asynccontextmanager
+from pathlib import Path
 
 import structlog
 from aiogram import Bot, Dispatcher
@@ -35,6 +38,15 @@ async def cancel_tasks(tasks: list[asyncio.Task[None]]) -> None:
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
+@asynccontextmanager
+async def managed_tasks() -> AsyncIterator[list[asyncio.Task[None]]]:
+    tasks: list[asyncio.Task[None]] = []
+    try:
+        yield tasks
+    finally:
+        await cancel_tasks(tasks)
+
+
 async def main() -> None:
     settings = load_settings()
     configure_logging(settings.log_format)
@@ -45,57 +57,48 @@ async def main() -> None:
 
     # Ensure DB directory exists
     db_path = settings.db_url.replace("sqlite+aiosqlite:///", "")
-    db_dir = os.path.dirname(db_path)
-    if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
+    db_dir = Path(db_path).parent
+    db_dir.mkdir(parents=True, exist_ok=True)
 
-    # Database
-    engine = create_async_engine(settings.db_url)
-    setup_sqlite_engine(engine)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    repo = SQLiteRepository(session_factory)
-    await repo.init_db()
+    async with AsyncExitStack() as resources:
+        engine = create_async_engine(settings.db_url)
+        setup_sqlite_engine(engine)
+        resources.push_async_callback(engine.dispose)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        repo = SQLiteRepository(session_factory)
+        await repo.init_db()
 
-    # Telegram bot
-    api_server = TelegramAPIServer.from_base(settings.telegram_api_url)
-    session = AiohttpSession(api=api_server)
-    bot = Bot(token=settings.telegram_bot_token, session=session)
-    dp = Dispatcher()
+        api_server = TelegramAPIServer.from_base(settings.telegram_api_url)
+        session = AiohttpSession(api=api_server)
+        resources.push_async_callback(session.close)
+        bot = Bot(token=settings.telegram_bot_token, session=session)
+        dp = Dispatcher()
 
-    # DI — wire up interfaces
-    sender = BotSender(bot, settings.assistants_chat_id)
-    max_sender = MaxSender(token=settings.max_bot_token)
-    support_service = SupportService(repo, sender, max_sender)
+        sender = BotSender(bot, settings.assistants_chat_id)
+        max_sender = MaxSender(token=settings.max_bot_token)
+        resources.push_async_callback(max_sender.close)
+        support_service = SupportService(repo, sender, max_sender)
 
-    background_tasks: list[asyncio.Task[None]] = []
-    try:
-        # Log bot info
-        bot_info = await bot.get_me()
-        log.info("telegram_bot_connected", username=bot_info.username, bot_id=bot_info.id)
+        async with managed_tasks() as background_tasks:
+            bot_info = await bot.get_me()
+            log.info("telegram_bot_connected", username=bot_info.username, bot_id=bot_info.id)
 
-        max_info = await max_sender.get_me()
-        max_username = max_info.get("username") or max_info.get("name", "Unknown")
-        log.info("max_bot_connected", username=max_username)
+            max_info = await max_sender.get_me()
+            max_username = max_info.get("username") or max_info.get("name", "Unknown")
+            log.info("max_bot_connected", username=max_username)
 
-        # Background services
-        alarm_service = AlarmService(repo, sender)
-        background_tasks.append(asyncio.create_task(alarm_service.start_monitoring()))
+            alarm_service = AlarmService(repo, sender)
+            background_tasks.append(asyncio.create_task(alarm_service.start_monitoring()))
 
-        max_polling = MaxPollingService(max_sender, support_service)
-        background_tasks.append(asyncio.create_task(max_polling.start_polling()))
+            max_polling = MaxPollingService(max_sender, support_service)
+            background_tasks.append(asyncio.create_task(max_polling.start_polling()))
 
-        # Middleware & routers
-        dp.update.middleware.register(SupportServiceMiddleware(support_service))
-        dp.include_routers(assistant.create_router(support_service))
+            dp.update.middleware.register(SupportServiceMiddleware(support_service))
+            dp.include_routers(assistant.create_router(support_service))
 
-        log.info("starting_telegram_polling")
-        await dp.start_polling(bot)
-    finally:
-        log.info("stopping_application")
-        await cancel_tasks(background_tasks)
-        await max_sender.close()
-        await bot.session.close()
-        await engine.dispose()
+            log.info("starting_telegram_polling")
+            await dp.start_polling(bot, close_bot_session=False)
+            log.info("stopping_application")
 
 
 if __name__ == "__main__":

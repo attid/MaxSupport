@@ -6,8 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables.
 
-    Environment variables take precedence. Optional .env file can be used
-    for local development (not used in production).
+    Values are loaded from process environment variables.
     """
 
     telegram_bot_token: str
@@ -18,7 +17,5 @@ class Settings(BaseSettings):
     log_format: Literal["json", "console"] = "json"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
         extra="ignore",
-        env_file_encoding="utf-8",
     )

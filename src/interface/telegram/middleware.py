@@ -1,6 +1,7 @@
 """aiogram middleware for injecting SupportService into handlers."""
 
-from typing import Any, Awaitable, Callable, Dict
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import BaseMiddleware
 
@@ -13,9 +14,9 @@ class SupportServiceMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Any, Dict[str, Any]], Awaitable[Any]],
+        handler: Callable[[Any, dict[str, Any]], Awaitable[Any]],
         event: Any,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ) -> Any:
         data["support_service"] = self.service
         return await handler(event, data)

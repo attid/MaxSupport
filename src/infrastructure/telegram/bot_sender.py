@@ -1,6 +1,5 @@
 """Telegram BotSender — реализация BotSenderInterface через aiogram."""
 
-import os
 import uuid
 from pathlib import Path
 from typing import Any
@@ -98,7 +97,7 @@ class BotSender(BotSenderInterface):
         )
         local_path: Path | None = None
         try:
-            filename = attachment.filename or "file"
+            filename = Path(attachment.filename or "file").name or "file"
             local_path = ATTACHMENTS_DIR / f"{uuid.uuid4()}_{filename}"
 
             async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as http:
@@ -106,7 +105,11 @@ class BotSender(BotSenderInterface):
                 r = await http.get(attachment.url)
                 r.raise_for_status()
                 local_path.write_bytes(r.content)
-                log.info("saved_attachment", path=str(local_path), size=os.path.getsize(local_path))
+                log.info(
+                    "saved_attachment",
+                    path=str(local_path),
+                    size=local_path.stat().st_size,
+                )
 
             input_file = FSInputFile(local_path, filename=filename)
 

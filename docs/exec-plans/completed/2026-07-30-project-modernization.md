@@ -13,28 +13,28 @@ MAX API остаётся на `platform-api.max.ru`; сертификаты и �
 
 ## План изменений
 
-1. [ ] Добавить characterization-тесты текущих Telegram handlers, MAX parsing,
+1. [x] Добавить characterization-тесты текущих Telegram handlers, MAX parsing,
    repository и lifecycle.
-2. [ ] Обновить прямые и транзитивные зависимости до последних стабильных
+2. [x] Обновить прямые и транзитивные зависимости до последних стабильных
    версий, обновить `uv.lock`.
-3. [ ] Исправить несовместимости aiogram, pydantic-settings, SQLAlchemy,
+3. [x] Исправить несовместимости aiogram, pydantic-settings, SQLAlchemy,
    structlog, pytest и ruff.
-4. [ ] Ввести строгие Pydantic-модели для входящих MAX updates на внешней
+4. [x] Ввести строгие Pydantic-модели для входящих MAX updates на внешней
    границе.
-5. [ ] Обрабатывать ошибку одного MAX update без остановки текущего batch.
-6. [ ] Добавить graceful shutdown фоновых задач, `MaxSender` и SQLAlchemy
+5. [x] Обрабатывать ошибку одного MAX update без остановки текущего batch.
+6. [x] Добавить graceful shutdown фоновых задач, `MaxSender` и SQLAlchemy
    engine.
-7. [ ] Перевести production-логи на JSON и оставить явный dev-режим.
-8. [ ] Гарантированно удалять временные файлы Telegram после отправки.
-9. [ ] Уменьшить перегруженность application-модулей минимальным рефакторингом
+7. [x] Перевести production-логи на JSON и оставить явный dev-режим.
+8. [x] Гарантированно удалять временные файлы Telegram после отправки.
+9. [x] Уменьшить перегруженность application-модулей минимальным рефакторингом
    без изменения поведения.
-10. [ ] Расширить ruff/format на `src`, `tests` и `.linters`.
-11. [ ] Добавить `test-fast`, `arch-test`, `metrics` и немутирующий `check`.
-12. [ ] Добавить механические проверки направления импортов и циклов.
-13. [ ] Синхронизировать README, architecture, conventions, glossary и
+10. [x] Расширить ruff/format на `src`, `tests` и `.linters`.
+11. [x] Добавить `test-fast`, `arch-test`, `metrics` и немутирующий `check`.
+12. [x] Добавить механические проверки направления импортов и циклов.
+13. [x] Синхронизировать README, architecture, conventions, glossary и
    quality grades с фактическим проектом.
-14. [ ] Удалить устаревший корневой `main.py`.
-15. [ ] Выполнить полную локальную проверку и сборку Docker image.
+14. [x] Удалить устаревший корневой `main.py`.
+15. [x] Выполнить полную локальную проверку и сборку Docker image.
 
 ## TDD-порядок
 
@@ -76,3 +76,15 @@ git status --short
 Ожидаемый результат: все проверки проходят; устаревших прямых зависимостей нет;
 MAX endpoint не изменён; публичное поведение сервиса сохранено.
 
+## Результат
+
+- Прямые зависимости обновлены, `uv tree --outdated --depth 1` чист.
+- Добавлен Pyright по ADR-0001.
+- Строгая MAX validation и batch isolation покрыты тестами.
+- Ресурсы закрываются через `AsyncExitStack`, включая частичный startup.
+- Production-логи используют JSON и не содержат upload tokens/response body.
+- Добавлены архитектурный линтер, JSON-метрики и полный `just check`.
+- Добавлены integration/characterization-тесты SQLite, Telegram handlers,
+  lifecycle, MAX adapter и файлов.
+- Docker image `maxsupport:verification` успешно собран.
+- MAX endpoint остался `https://platform-api.max.ru`; сертификаты не менялись.

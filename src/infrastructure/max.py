@@ -49,7 +49,7 @@ class MaxSender(MaxSenderInterface):
             return updates, new_marker
         except Exception as e:
             log.error("max_api_error", error=str(e))
-            return [], marker
+            raise
 
     async def upload_file(self, file_data: bytes, filename: str) -> str | None:
         """Upload file to Max: POST /uploads → get URL → PUT file → get token."""
@@ -75,7 +75,7 @@ class MaxSender(MaxSenderInterface):
                 if not token:
                     # Try fileId-based token
                     token = r2.json().get("id")
-                log.info("file_uploaded", token=token)
+                log.info("file_uploaded")
                 return token
         except Exception as e:
             log.error("max_api_error", error=str(e))
@@ -110,7 +110,6 @@ class MaxSender(MaxSenderInterface):
                 log.error(
                     "max_api_error",
                     status=response.status_code,
-                    response_body=response.text,
                 )
                 response.raise_for_status()
             return 0
