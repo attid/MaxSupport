@@ -70,11 +70,15 @@ docker compose up -d
 | `MAX_BOT_TOKEN` | да | Токен MAX-бота |
 | `ASSISTANTS_CHAT_ID` | да | ID Telegram forum group |
 | `DB_URL` | нет | `sqlite+aiosqlite:///./data.db` |
-| `TELEGRAM_API_URL` | нет | `https://api.telegram.org` |
+| `TELEGRAM_API_URL` | нет | Base URL custom API server; пустое значение использует `https://api.telegram.org` |
 | `LOG_FORMAT` | нет | `json` или `console` |
 
 MAX используется через собственный адаптер `httpx`. Endpoint остаётся
 `https://platform-api.max.ru`.
+
+Например, `TELEGRAM_API_URL=https://api.mtlminiapps.us` переключает aiogram на
+`https://api.mtlminiapps.us/bot{token}/{method}` и
+`https://api.mtlminiapps.us/file/bot{token}/{path}`.
 
 ## Документация
 
